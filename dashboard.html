@@ -1794,12 +1794,17 @@ function aplicarPiloto(key){
   const p = PILOTS[key];
   if(!p) return;
   currentPilot = key;
-  document.getElementById('splashPhotoImg').src = p.foto;
-  document.getElementById('splashPhotoImg').alt = p.nombre;
-  document.getElementById('splashBadgeNum').textContent = p.numero;
-  document.getElementById('splashFlagImg').src = `https://flagcdn.com/w40/${p.pais}.png`;
-  document.getElementById('splashFlagImg').alt = p.pais.toUpperCase();
-  document.getElementById('splashNameText').textContent = p.nombre;
+  // splash (pantalla de bienvenida): puede no existir mas si ya se toco
+  // "Encender motor" antes, ese elemento se borra del DOM. Se chequea
+  // cada uno para no romper el resto de la funcion si ya no esta.
+  const splashPhoto = document.getElementById('splashPhotoImg');
+  if(splashPhoto){ splashPhoto.src = p.foto; splashPhoto.alt = p.nombre; }
+  const splashBadge = document.getElementById('splashBadgeNum');
+  if(splashBadge) splashBadge.textContent = p.numero;
+  const splashFlag = document.getElementById('splashFlagImg');
+  if(splashFlag){ splashFlag.src = `https://flagcdn.com/w40/${p.pais}.png`; splashFlag.alt = p.pais.toUpperCase(); }
+  const splashName = document.getElementById('splashNameText');
+  if(splashName) splashName.textContent = p.nombre;
   // header (barra de arriba, visible todo el tiempo que se usa el dashboard)
   document.getElementById('driverBadgeNum').textContent = p.numero;
   document.getElementById('brandFlagImg').src = `https://flagcdn.com/w40/${p.pais}.png`;
