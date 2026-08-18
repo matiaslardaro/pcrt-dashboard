@@ -14,11 +14,12 @@ echo "=========================================="
 
 echo ""
 echo "[1/6] Actualizando paquetes de Termux..."
-pkg update -y >/dev/null 2>&1
-pkg upgrade -y >/dev/null 2>&1
+export DEBIAN_FRONTEND=noninteractive
+pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" < /dev/null
+pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" < /dev/null
 
 echo "[2/6] Instalando python y git..."
-pkg install -y python git >/dev/null 2>&1
+pkg install -y python git < /dev/null >/dev/null 2>&1
 
 echo "[3/6] Pidiendo permiso de almacenamiento..."
 termux-setup-storage
