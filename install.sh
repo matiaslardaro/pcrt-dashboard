@@ -36,8 +36,7 @@ else
 fi
 
 echo "[5/6] Instalando librerias de Python (gt-telem, websockets)..."
-pip install --upgrade pip >/dev/null 2>&1
-pip install gt-telem websockets >/dev/null 2>&1
+pip install gt-telem websockets < /dev/null
 
 echo "[6/6] Dejando listo el widget..."
 mkdir -p "$HOME/.shortcuts"
