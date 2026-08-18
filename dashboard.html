@@ -151,6 +151,34 @@
   #statusWrap{display:flex; align-items:center; gap:10px; flex-shrink:0;}
   .dot{width:8px; height:8px; border-radius:50%; background:var(--red);}
   .dot.on{background:var(--green); box-shadow:0 0 6px var(--green);}
+  #fechaToggle{
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    cursor:pointer; user-select:none; background:var(--panel-2);
+    border:1px solid var(--line); border-radius:6px; padding:5px 9px 6px;
+  }
+  #fechaLight{
+    width:7px; height:7px; border-radius:50%; background:#3a1414;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.6); transition:background .15s, box-shadow .15s;
+  }
+  #fechaToggle.active #fechaLight{background:var(--green); box-shadow:0 0 6px var(--green);}
+  #fechaSwitchBody{
+    position:relative; width:22px; height:34px; border-radius:4px;
+    background:linear-gradient(180deg,#2c313a,#181b20); border:1px solid #000;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.6);
+  }
+  #fechaLever{
+    position:absolute; left:50%; top:16px; width:11px; height:20px;
+    margin-left:-5.5px; border-radius:3px;
+    background:linear-gradient(90deg,#b8bcc2,#e8ebee,#9aa0a8);
+    box-shadow:0 2px 3px rgba(0,0,0,.5);
+    transition:transform .15s ease;
+  }
+  #fechaToggle.active #fechaLever{transform:translateY(-16px);}
+  #fechaLabel{
+    font-size:8px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--dim); font-weight:600; transition:color .15s;
+  }
+  #fechaToggle.active #fechaLabel{color:var(--green);}
   #fsBtn, #confToggle{
     background:none; border:1px solid var(--line); color:var(--dim);
     border-radius:4px; padding:4px 8px; font-size:11px; cursor:pointer;
@@ -577,12 +605,14 @@
   <div id="leds"></div>
   <div id="statusWrap">
     <div id="gameClock">--:--</div>
-    <button id="lapHistoryBtn" onclick="toggleLapHistory()">📋</button>
-    <button id="summaryBtn" onclick="shareSessionSummary()">📤</button>
+    <div id="fechaToggle" onclick="toggleModoFecha()">
+      <span id="fechaLight"></span>
+      <span id="fechaSwitchBody"><span id="fechaLever"></span></span>
+      <span id="fechaLabel">FECHA</span>
+    </div>
     <button id="mapBtn" onclick="toggleMap()">🗺️</button>
     <button id="pilotBtn" onclick="cambiarPiloto()">👤</button>
     <button id="debugBtn" onclick="toggleDebug()">🔧</button>
-    <button id="confToggle" onclick="toggleConf()">⚙</button>
     <button id="fsBtn" onclick="toggleFullscreen()">⛶</button>
     <div class="dot" id="statusDot"></div>
   </div>
@@ -1200,6 +1230,89 @@ let sessionStartFuel = null;
 let lastCarLabel = '';
 let lastTrackLabel = '';
 
+// ---- modo fecha: cuando esta activo, las sesiones de carrera (vueltas fijas) se archivan como oficiales ----
+const SESSION_STORAGE_KEY = 'pcrt_sesionActual';
+const ARCHIVE_STORAGE_KEY = 'pcrt_sesionesArchivadas';
+const MAX_ARCHIVED_SESSIONS = 50;
+let modoFecha = localStorage.getItem('pcrt_modoFecha') === '1';
+
+function toggleModoFecha(){
+  modoFecha = !modoFecha;
+  localStorage.setItem('pcrt_modoFecha', modoFecha ? '1' : '0');
+  renderModoFecha();
+}
+
+function renderModoFecha(){
+  const el = document.getElementById('fechaToggle');
+  const label = document.getElementById('fechaLabel');
+  if(!el) return;
+  el.classList.toggle('active', modoFecha);
+  label.textContent = modoFecha ? 'REGISTRANDO' : 'FECHA';
+}
+
+// guarda la sesion en curso para no perderla si se cierra Chrome (recuperacion ante cierre)
+function guardarSesionActual(){
+  if(lapHistory.length === 0) return;
+  const snapshot = {
+    trackId: lapTrack.currentTrackId,
+    totalLaps: lastKnownTotalLaps || 0,
+    track: lastTrackLabel,
+    car: lastCarLabel,
+    piloto: currentPilot,
+    esFecha: modoFecha,
+    lapHistory: lapHistory,
+    sessionStartFuel: sessionStartFuel,
+    lastFuelPct: lastFuelPct,
+    fuelPerLapHistory: fuelPerLapHistory
+  };
+  try{ localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(snapshot)); }catch(e){}
+}
+
+// al abrir el dashboard, si habia una sesion sin cerrar la recuperamos (por si se cerro Chrome a mitad de sesion)
+function restaurarSesionActual(){
+  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+  if(!raw) return;
+  let s;
+  try{ s = JSON.parse(raw); }catch(e){ return; }
+  if(!s || !Array.isArray(s.lapHistory) || s.lapHistory.length === 0) return;
+  lapHistory = s.lapHistory;
+  sessionStartFuel = s.sessionStartFuel;
+  lastFuelPct = s.lastFuelPct;
+  fuelPerLapHistory = s.fuelPerLapHistory || [];
+  lastTrackLabel = s.track || '';
+  lastCarLabel = s.car || '';
+  lapTrack.currentTrackId = s.trackId;
+  lastKnownTotalLaps = s.totalLaps || 0;
+  pendingTotalLaps = s.totalLaps || 0;
+  pendingTotalLapsCount = TOTAL_LAPS_CONFIRM_COUNT;
+  renderMiniLapList();
+}
+
+// al cerrar una sesion (cambio de circuito o de tipo practica/carrera), archivamos si era carrera de vueltas fijas
+function archivarSesionActual(prevTotalLaps){
+  if(lapHistory.length > 0 && prevTotalLaps > 0){
+    const validas = lapHistory.filter(l => !l.outLap);
+    const bestMs = validas.length ? Math.min(...validas.map(l => l.timeMs)) : null;
+    const entry = {
+      fecha: Date.now(),
+      esFecha: modoFecha,
+      track: lastTrackLabel,
+      car: lastCarLabel,
+      piloto: currentPilot,
+      totalLaps: prevTotalLaps,
+      vueltasCompletadas: lapHistory.length,
+      mejorVuelta: bestMs,
+      laps: lapHistory
+    };
+    let archivo = [];
+    try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){}
+    archivo.push(entry);
+    if(archivo.length > MAX_ARCHIVED_SESSIONS) archivo = archivo.slice(-MAX_ARCHIVED_SESSIONS);
+    try{ localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(archivo)); }catch(e){}
+  }
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
 function shareSessionSummary(){
   if(lapHistory.length === 0){
     alert('Todavia no completaste ninguna vuelta esta sesion.');
@@ -1270,7 +1383,8 @@ function renderMiniLapList(){
   }).join('');
 }
 
-function resetLapTrack(){
+function resetLapTrack(prevTotalLaps){
+  archivarSesionActual(prevTotalLaps || 0);
   lapTrack.lastLapNum = null;
   lapTrack.firstLapNum = null;
   lapTrack.lapStartTime = null;
@@ -1611,13 +1725,13 @@ function connect(){
       && pendingTotalLaps !== lastKnownTotalLaps;
 
     if(trackId != null && lapTrack.currentTrackId !== null && trackId !== lapTrack.currentTrackId){
-      resetLapTrack();
+      resetLapTrack(lastKnownTotalLaps);
       allPositionPoints = [];
       tryAutoLoadTrackMap(trackId);
       lastKnownTotalLaps = totalLapsNorm;
     } else if(cambioSesionCarrera){
       // paso de practica a carrera (o viceversa) confirmado: es una sesion nueva, no mezclamos vueltas
-      resetLapTrack();
+      resetLapTrack(lastKnownTotalLaps);
       allPositionPoints = [];
       if(trackId != null) tryAutoLoadTrackMap(trackId);
       lastKnownTotalLaps = pendingTotalLaps;
@@ -1667,6 +1781,7 @@ function connect(){
             if(!yaRegistrada) lapHistory.push({lapNum: lapTrack.lastLapNum, timeMs: last, outLap: esSalidaDeBoxes});
             if(document.getElementById('lapHistoryPanel').classList.contains('open')) renderLapHistory();
             renderMiniLapList();
+            guardarSesionActual();
           }
           // solo cuenta como referencia de delta si NO es la primera vuelta vista
           // (esa primera puede venir de la salida de boxes, con distancia/tiempo distorsionados)
@@ -1856,6 +1971,8 @@ function initPiloto(){
   }
 }
 initPiloto();
+restaurarSesionActual();
+renderModoFecha();
 function hideSplash(){
   const el = document.documentElement;
   const reqFs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
