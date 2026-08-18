@@ -41,3 +41,4 @@ Si Matias avisa que hay una actualización, correr de nuevo el mismo comando del
 
 - **No conecta / "esperando telemetría"**: revisar que el celu y la PS5 estén en la misma red wifi, y que GT7 esté corriendo una vuelta (no en un menú).
 - **El widget no aparece en Termux:Widget**: abrir Termux y correr `ls ~/.shortcuts/` — tiene que listar `PCRT.sh`. Si no está, correr el instalador de nuevo.
+- **"Termux requires 'Display over other apps' permission"**: Android pide este permiso aparte para que el widget pueda abrir la sesión de Termux. Ir a **Ajustes > Apps > Termux > Permisos avanzados (u "Otros permisos") > Mostrar sobre otras apps** y activarlo. Después de eso el widget funciona normal.
