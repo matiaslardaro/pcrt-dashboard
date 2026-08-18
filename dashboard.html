@@ -567,6 +567,41 @@
   .pilotOpt span{ font-weight:700; font-size:14px; color:var(--text); }
   .pilotOpt small{ color:var(--dim); font-size:11px; letter-spacing:.05em; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://onedwgygbpmhksiaouun.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_eghHyzp21oO1g5Q_FR48yA_kWzA8kal';
+const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// mapea la clave de piloto local (dashboard.html) al UUID fijo de la tabla drivers en Supabase
+const PILOT_DRIVER_IDS = {
+  luciano: '5f9c470d-8453-4fa0-9565-0116c969cf9e',
+  mariano: 'c0acb8b8-8446-4af0-bbe4-fedef0e2803d',
+  matias:  '0175feae-678e-4dbe-b8fe-21303f9e5463',
+  walter:  '98174d3e-799e-4f32-be8c-48f84d0253e7'
+};
+
+// sube la sesion a dashboard_sessions si estamos en modo fecha; no bloquea, solo loguea si falla
+async function subirSesionSupabase(entry){
+  const driverId = PILOT_DRIVER_IDS[currentPilot];
+  if(!driverId) return;
+  try{
+    const { error } = await sbClient.from('dashboard_sessions').insert({
+      driver_id: driverId,
+      es_fecha: entry.esFecha,
+      track: entry.track,
+      car: entry.car,
+      total_laps: entry.totalLaps,
+      laps_completed: entry.vueltasCompletadas,
+      best_lap_ms: entry.mejorVuelta,
+      laps: entry.laps
+    });
+    if(error) console.error('Error subiendo sesion a Supabase:', error);
+  }catch(e){
+    console.error('Error de red subiendo sesion a Supabase:', e);
+  }
+}
+</script>
 </head>
 <body>
 
@@ -1309,6 +1344,7 @@ function archivarSesionActual(prevTotalLaps){
     archivo.push(entry);
     if(archivo.length > MAX_ARCHIVED_SESSIONS) archivo = archivo.slice(-MAX_ARCHIVED_SESSIONS);
     try{ localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(archivo)); }catch(e){}
+    if(modoFecha) subirSesionSupabase(entry);
   }
   localStorage.removeItem(SESSION_STORAGE_KEY);
 }
