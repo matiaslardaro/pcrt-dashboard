@@ -22,7 +22,7 @@ echo "[2/6] Instalando python y git..."
 pkg install -y python git < /dev/null >/dev/null 2>&1
 
 echo "[3/6] Pidiendo permiso de almacenamiento..."
-termux-setup-storage
+termux-setup-storage || true
 sleep 2
 
 echo "[4/6] Bajando el proyecto PCRT..."
