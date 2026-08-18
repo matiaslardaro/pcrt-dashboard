@@ -35,7 +35,7 @@ Importante: el celu tiene que estar conectado a la **misma red wifi que la PS5**
 
 ## Actualizar a una versión nueva
 
-Si Matias avisa que hay una actualización, correr de nuevo el mismo comando del paso 3 — detecta que ya está instalado y actualiza con `git pull` en vez de reinstalar todo.
+Se actualiza solo. Cada vez que tocás el ícono **PCRT.sh**, antes de prender el servidor busca cambios nuevos en el repo (`git pull`) y los instala — no hace falta correr ningún comando a mano. Si el celu no tiene internet en ese momento (ej: red de la PS5 sin salida a internet), sigue de largo con la versión que ya tenía instalada, sin trabarse.
 
 ## Problemas comunes
 

@@ -16,6 +16,19 @@ pkill -9 -f gt7_bridge.py 2>/dev/null
 pkill -9 -f "http.server" 2>/dev/null
 sleep 1
 
+echo "Buscando actualizaciones..."
+cd "$CARPETA" || exit 1
+ANTES=$(git rev-parse HEAD 2>/dev/null)
+if timeout 6 git pull --quiet 2>/dev/null; then
+  DESPUES=$(git rev-parse HEAD 2>/dev/null)
+  if [ "$ANTES" != "$DESPUES" ]; then
+    echo "Hay una version nueva, instalando dependencias..."
+    pip install -q gt-telem websockets < /dev/null 2>/dev/null
+  fi
+else
+  echo "No se pudo buscar actualizaciones (sin internet?), sigo con la version actual"
+fi
+
 echo "Iniciando servidor PCRT..."
 cd "$CARPETA" || exit 1
 nohup python pcrt_server.py > "$LOG" 2>&1 &
