@@ -1820,16 +1820,6 @@ function connect(){
           if(typeof totalLaps === 'number' && totalLaps > 0 && lapTrack.lastLapNum === totalLaps){
             showCheckeredFlag();
           }
-          // se completo una vuelta: la anotamos en el historial de la sesion
-          if(typeof last === 'number' && last > 0){
-            const paroEnBoxes = lapTrack.lowSpeedMs > 3000; // mas de 3s casi detenido: pit stop real
-            const esSalidaDeBoxes = (lapTrack.lastLapNum === lapTrack.firstLapNum) || paroEnBoxes;
-            const yaRegistrada = lapHistory.some(l => l.lapNum === lapTrack.lastLapNum);
-            if(!yaRegistrada) lapHistory.push({lapNum: lapTrack.lastLapNum, timeMs: last, outLap: esSalidaDeBoxes});
-            if(document.getElementById('lapHistoryPanel').classList.contains('open')) renderLapHistory();
-            renderMiniLapList();
-            guardarSesionActual();
-          }
           // solo cuenta como referencia de delta si NO es la primera vuelta vista
           // (esa primera puede venir de la salida de boxes, con distancia/tiempo distorsionados)
           const esVueltaValida = lapTrack.lastLapNum !== lapTrack.firstLapNum;
@@ -1837,11 +1827,29 @@ function connect(){
              typeof last === 'number' && typeof best === 'number' && last === best && best > 0){
             lapTrack.bestTrace = lapTrack.currentTrace;
           }
-          // cerramos el sector 3 (si llegamos a cruzar S1 y S2 esta vuelta) y guardamos la distancia total
+          // cerramos el sector 3 (si llegamos a cruzar S1 y S2 esta vuelta) ANTES de registrar la vuelta,
+          // asi el registro que se guarda en lapHistory ya viaja con los 3 sectores completos
           if(esVueltaValida && typeof last === 'number' && last > 0 &&
              lapTrack.sectorTimes[0] != null && lapTrack.sectorTimes[1] != null){
             lapTrack.sectorTimes[2] = last - lapTrack.sectorTimes[0] - lapTrack.sectorTimes[1];
             updateBestSector(2, lapTrack.sectorTimes[2]);
+          }
+          // se completo una vuelta: la anotamos en el historial de la sesion (con sectores si se pudieron medir)
+          if(typeof last === 'number' && last > 0){
+            const paroEnBoxes = lapTrack.lowSpeedMs > 3000; // mas de 3s casi detenido: pit stop real
+            const esSalidaDeBoxes = (lapTrack.lastLapNum === lapTrack.firstLapNum) || paroEnBoxes;
+            const yaRegistrada = lapHistory.some(l => l.lapNum === lapTrack.lastLapNum);
+            if(!yaRegistrada) lapHistory.push({
+              lapNum: lapTrack.lastLapNum,
+              timeMs: last,
+              outLap: esSalidaDeBoxes,
+              s1Ms: lapTrack.sectorTimes[0] ?? null,
+              s2Ms: lapTrack.sectorTimes[1] ?? null,
+              s3Ms: lapTrack.sectorTimes[2] ?? null
+            });
+            if(document.getElementById('lapHistoryPanel').classList.contains('open')) renderLapHistory();
+            renderMiniLapList();
+            guardarSesionActual();
           }
           if(esVueltaValida && lapTrack.currentDist > 100){
             lapTrack.lapDistanceEstimate = lapTrack.currentDist;
