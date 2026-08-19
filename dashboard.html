@@ -589,6 +589,7 @@ async function subirSesionSupabase(entry){
     const { error } = await sbClient.from('dashboard_sessions').insert({
       driver_id: driverId,
       es_fecha: entry.esFecha,
+      fecha_id: entry.fechaId,
       track: entry.track,
       car: entry.car,
       total_laps: entry.totalLaps,
@@ -1270,10 +1271,19 @@ const SESSION_STORAGE_KEY = 'pcrt_sesionActual';
 const ARCHIVE_STORAGE_KEY = 'pcrt_sesionesArchivadas';
 const MAX_ARCHIVED_SESSIONS = 50;
 let modoFecha = localStorage.getItem('pcrt_modoFecha') === '1';
+let fechaId = localStorage.getItem('pcrt_fechaId') || null;
 
 function toggleModoFecha(){
   modoFecha = !modoFecha;
   localStorage.setItem('pcrt_modoFecha', modoFecha ? '1' : '0');
+  if(modoFecha){
+    // nueva fecha: se genera un id que agrupa todas las carreras que se suban mientras la palanca siga prendida
+    fechaId = crypto.randomUUID();
+    localStorage.setItem('pcrt_fechaId', fechaId);
+  }else{
+    fechaId = null;
+    localStorage.removeItem('pcrt_fechaId');
+  }
   renderModoFecha();
 }
 
@@ -1331,6 +1341,7 @@ function archivarSesionActual(prevTotalLaps){
     const entry = {
       fecha: Date.now(),
       esFecha: modoFecha,
+      fechaId: fechaId,
       track: lastTrackLabel,
       car: lastCarLabel,
       piloto: currentPilot,
