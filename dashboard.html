@@ -1827,17 +1827,19 @@ function connect(){
              typeof last === 'number' && typeof best === 'number' && last === best && best > 0){
             lapTrack.bestTrace = lapTrack.currentTrace;
           }
-          // cerramos el sector 3 (si llegamos a cruzar S1 y S2 esta vuelta) ANTES de registrar la vuelta,
-          // asi el registro que se guarda en lapHistory ya viaja con los 3 sectores completos
+          // cerramos el sector 3 (si llegamos a cruzar S1 y S2 esta vuelta) ANTES de guardar la vuelta,
+          // asi el sector 3 queda disponible a tiempo para lapHistory
+          let s3CerradoEstaVuelta = null;
           if(esVueltaValida && typeof last === 'number' && last > 0 &&
              lapTrack.sectorTimes[0] != null && lapTrack.sectorTimes[1] != null){
             lapTrack.sectorTimes[2] = last - lapTrack.sectorTimes[0] - lapTrack.sectorTimes[1];
             updateBestSector(2, lapTrack.sectorTimes[2]);
+            s3CerradoEstaVuelta = lapTrack.sectorTimes[2];
           }
-          // se completo una vuelta: la anotamos en el historial de la sesion (con sectores si se pudieron medir)
+          // se completo una vuelta: la anotamos en el historial de la sesion (con sectores, si se pudieron cerrar)
           if(typeof last === 'number' && last > 0){
             const paroEnBoxes = lapTrack.lowSpeedMs > 3000; // mas de 3s casi detenido: pit stop real
-            const esSalidaDeBoxes = (lapTrack.lastLapNum === lapTrack.firstLapNum) || paroEnBoxes;
+            const esSalidaDeBoxes = paroEnBoxes; // el label BOX depende solo de una parada real, no de ser la primera vuelta vista
             const yaRegistrada = lapHistory.some(l => l.lapNum === lapTrack.lastLapNum);
             if(!yaRegistrada) lapHistory.push({
               lapNum: lapTrack.lastLapNum,
@@ -1845,7 +1847,7 @@ function connect(){
               outLap: esSalidaDeBoxes,
               s1Ms: lapTrack.sectorTimes[0] ?? null,
               s2Ms: lapTrack.sectorTimes[1] ?? null,
-              s3Ms: lapTrack.sectorTimes[2] ?? null
+              s3Ms: s3CerradoEstaVuelta
             });
             if(document.getElementById('lapHistoryPanel').classList.contains('open')) renderLapHistory();
             renderMiniLapList();
