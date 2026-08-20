@@ -1316,6 +1316,13 @@ function restaurarSesionActual(){
   lastTrackLabel = s.track || '';
   lastCarLabel = s.car || '';
   lapTrack.currentTrackId = s.trackId;
+  // si no restauramos esto, el chequeo de "la vuelta bajo" nunca tiene con que comparar
+  // despues de un reload, y una sesion vieja contaminada queda pegada para siempre
+  if(s.lapHistory.length > 0){
+    const ultima = s.lapHistory[s.lapHistory.length - 1];
+    lapTrack.lastLapNum = ultima.lapNum;
+    lapTrack.firstLapNum = ultima.lapNum;
+  }
   lastKnownTotalLaps = s.totalLaps || 0;
   pendingTotalLaps = s.totalLaps || 0;
   pendingTotalLapsCount = TOTAL_LAPS_CONFIRM_COUNT;
