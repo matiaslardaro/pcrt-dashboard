@@ -249,7 +249,29 @@
 
   /* left column: fuel + lap */
   #colLeft{grid-column:1; grid-row:1; justify-content:flex-start;}
-  #miniMapWrap{flex:1; margin-top:8px; min-height:0;}
+  #miniMapWrap{flex:1; margin-top:8px; min-height:0; position:relative;}
+  #miniMapPlaceholder{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; font-size:11px; color:var(--dim); padding:10px;
+  }
+  #miniMapPlaceholder.hide{display:none;}
+
+  /* ---------- prompt de ambiguedad de circuito (solo Matias) ---------- */
+  #trackAmbiguityPrompt{
+    display:none; position:fixed; left:50%; top:16px; transform:translateX(-50%); z-index:60;
+    background:linear-gradient(155deg, #14181f 0%, #0a0d12 100%);
+    border:1px solid var(--amber); border-radius:14px; padding:14px 18px;
+    box-shadow: 0 0 0 1px rgba(232,184,48,.3), 0 0 22px 4px rgba(232,184,48,.2);
+    max-width:92vw;
+  }
+  #trackAmbiguityPrompt.open{display:block;}
+  #trackAmbiguityPrompt .titulo{font-size:12px; color:var(--amber); font-weight:700; margin-bottom:10px; text-transform:uppercase; letter-spacing:.05em;}
+  #trackAmbiguityPrompt .opciones{display:flex; gap:8px; flex-wrap:wrap;}
+  #trackAmbiguityPrompt button{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:9px 16px; border-radius:8px; font-weight:600; font-size:13px;
+  }
+  #trackAmbiguityPrompt button:active{background:var(--amber); color:#1a1300;}
   #miniMap{width:100%; height:100%; display:block;}
   .stat-block{text-align:left;}
   .stat-block .val{font-size:clamp(28px,5vw,46px); font-weight:700; margin-top:2px;}
@@ -643,6 +665,11 @@ async function subirSesionSupabase(entry){
   </div>
 </div>
 
+<div id="trackAmbiguityPrompt">
+  <div class="titulo">¿Qué circuito es?</div>
+  <div class="opciones" id="trackAmbiguityOpciones"></div>
+</div>
+
 <div id="debugPanel">
   <button onclick="toggleDebug()">Cerrar</button>
   <div id="debugTrackSummary" class="label" style="font-size:16px; color:var(--text); margin-bottom:10px;">
@@ -713,6 +740,7 @@ async function subirSesionSupabase(entry){
     </div>
     <div id="miniMapWrap">
       <canvas id="miniMap"></canvas>
+      <div id="miniMapPlaceholder">Detectando circuito...</div>
     </div>
   </div>
 
@@ -819,18 +847,78 @@ const MAP_ID_PREFIX = 'gt7_track_id_';
 let autoMapPending = false;
 
 function guessTrackIdByDistance(distMeters){
-  let bestId = null;
-  let bestDiff = Infinity;
+  const candidates = guessTrackCandidates(distMeters);
+  return candidates.length > 0 ? candidates[0].id : null;
+}
+
+// devuelve todos los circuitos candidatos (dentro de la tolerancia), ordenados del mas parecido al menos parecido
+function guessTrackCandidates(distMeters){
+  const scored = [];
   for(const id in COURSE_INFO){
     const lenM = parseFloat(COURSE_INFO[id].l);
     if(!lenM) continue;
     const diff = Math.abs(lenM - distMeters) / lenM;
-    if(diff < bestDiff){
-      bestDiff = diff;
-      bestId = id;
-    }
+    if(diff < 0.03) scored.push({id, diff});
   }
-  return (bestDiff < 0.03) ? bestId : null; // tolerancia 3% (mas estricta para evitar confundir circuitos parecidos)
+  scored.sort((a,b) => a.diff - b.diff);
+  return scored;
+}
+
+// ---- puertas de largada aprendidas: la posicion + direccion exacta donde vimos cruzar la
+// linea de meta la primera vez que identificamos cada circuito. Una vez aprendida, sirve para
+// reconocer ese mismo circuito al toque la proxima vez, sin depender de si gt-telem lo tiene
+// en su base o de que la distancia no se confunda con otro circuito parecido.
+const TRACK_GATE_KEY = 'pcrt_track_gates';
+function loadTrackGates(){
+  try{ return JSON.parse(localStorage.getItem(TRACK_GATE_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveTrackGate(trackId, x, z, dx, dz){
+  const mag = Math.sqrt(dx*dx + dz*dz);
+  if(!mag) return; // sin movimiento no hay direccion confiable, no guardamos nada
+  const gates = loadTrackGates();
+  gates[trackId] = { x, z, dx: dx/mag, dz: dz/mag };
+  try{ localStorage.setItem(TRACK_GATE_KEY, JSON.stringify(gates)); }catch(e){}
+}
+function matchTrackGate(x, z, dx, dz){
+  const mag = Math.sqrt(dx*dx + dz*dz);
+  if(!mag) return null;
+  const ndx = dx/mag, ndz = dz/mag;
+  const gates = loadTrackGates();
+  let bestId = null, bestDist = Infinity;
+  for(const id in gates){
+    const g = gates[id];
+    const d = Math.sqrt((g.x-x)**2 + (g.z-z)**2);
+    if(d > 25) continue; // demasiado lejos de esta puerta conocida
+    const cos = ndx*g.dx + ndz*g.dz;
+    if(cos < 0.85) continue; // cruzando en una direccion muy distinta, no es la misma puerta
+    if(d < bestDist){ bestDist = d; bestId = id; }
+  }
+  return bestId;
+}
+
+// ---- prompt de "que circuito es" cuando hay empate real por distancia (solo para Matias,
+// que es el unico que pidio que le pregunten en vez de arriesgar un nombre incorrecto) ----
+let ambiguedadResuelta = false; // evita que vuelva a preguntar dentro de la misma sesion
+function mostrarAmbiguedadCircuito(ids, lastPos, crossPos){
+  if(ambiguedadResuelta) return;
+  ambiguedadResuelta = true;
+  const cont = document.getElementById('trackAmbiguityOpciones');
+  cont.innerHTML = ids.map(id => {
+    const nombre = COURSE_NAMES[String(id)] || ('Circuito ' + id);
+    return `<button data-id="${id}">${nombre}</button>`;
+  }).join('');
+  cont.querySelectorAll('button').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute('data-id');
+      lapTrack.currentTrackId = id;
+      tryAutoLoadTrackMap(id);
+      if(lastPos && crossPos){
+        saveTrackGate(id, crossPos[0], crossPos[2], crossPos[0]-lastPos[0], crossPos[2]-lastPos[2]);
+      }
+      document.getElementById('trackAmbiguityPrompt').classList.remove('open');
+    };
+  });
+  document.getElementById('trackAmbiguityPrompt').classList.add('open');
 }
 
 function tryAutoLoadTrackMap(trackId){
@@ -957,6 +1045,24 @@ function renderTrackMap(canvasId, {compact=false} = {}){
   const w = canvas.width, h = canvas.height;
   if(w === 0 || h === 0) return;
   ctx.clearRect(0,0,w,h);
+
+  // en el mini mapa del dashboard no queremos mostrar el trazo mientras se va dibujando en vivo:
+  // se muestra vacio (con un texto) hasta que el circuito este identificado y haya un trazado
+  // completo guardado para mostrar de una
+  if(compact){
+    const placeholder = document.getElementById('miniMapPlaceholder');
+    if(lapTrack.currentTrackId == null){
+      placeholder.textContent = 'Detectando circuito...';
+      placeholder.classList.remove('hide');
+      return;
+    }
+    if(!savedMapPoints || savedMapPoints.length <= 10){
+      placeholder.textContent = 'Grabando trazado del circuito...';
+      placeholder.classList.remove('hide');
+      return;
+    }
+    placeholder.classList.add('hide');
+  }
 
   const trace = savedMapPoints && savedMapPoints.length > 10 ? savedMapPoints : allPositionPoints;
 
@@ -1445,6 +1551,8 @@ function resetLapTrack(prevTotalLaps){
   fuelPerLapHistory = [];
   lapHistory = [];
   sessionStartFuel = null;
+  ambiguedadResuelta = false;
+  document.getElementById('trackAmbiguityPrompt').classList.remove('open');
   renderSectors();
   renderMiniLapList();
 }
@@ -1814,6 +1922,16 @@ function connect(){
           // solo cuenta como referencia de delta si NO es la primera vuelta vista
           // (esa primera puede venir de la salida de boxes, con distancia/tiempo distorsionados)
           const esVueltaValida = lapTrack.lastLapNum !== lapTrack.firstLapNum;
+          // intentamos reconocer el circuito por la posicion+direccion exacta de cruce de meta
+          // (aprendida de una vez anterior), antes de meternos con lo de la distancia
+          if(esVueltaValida && lapTrack.currentTrackId == null && lapTrack.lastPos){
+            const dxGate = posArr[0]-lapTrack.lastPos[0], dzGate = posArr[2]-lapTrack.lastPos[2];
+            const matchedGateId = matchTrackGate(posArr[0], posArr[2], dxGate, dzGate);
+            if(matchedGateId != null){
+              lapTrack.currentTrackId = matchedGateId;
+              tryAutoLoadTrackMap(matchedGateId);
+            }
+          }
           if(esVueltaValida && lapTrack.currentTrace.length > 1 &&
              typeof last === 'number' && typeof best === 'number' && last === best && best > 0){
             lapTrack.bestTrace = lapTrack.currentTrace;
@@ -1851,13 +1969,27 @@ function connect(){
             if(lapTrack.minValidLapDist === null || lapTrack.currentDist < lapTrack.minValidLapDist){
               lapTrack.minValidLapDist = lapTrack.currentDist;
             }
-            // si GT7 nunca nos dio un ID de circuito confiable en esta sesion, lo adivinamos
-            // comparando la vuelta mas corta medida contra la longitud conocida de cada circuito
-            if(trackId == null && lapTrack.minValidLapDist > 500){
-              const guessedId = guessTrackIdByDistance(lapTrack.minValidLapDist);
-              if(guessedId != null && guessedId !== lapTrack.currentTrackId){
-                lapTrack.currentTrackId = guessedId;
-                tryAutoLoadTrackMap(guessedId);
+            // si GT7 nunca nos dio un ID de circuito confiable en esta sesion, y tampoco lo
+            // reconocimos por una puerta aprendida, lo adivinamos por la distancia medida
+            if(trackId == null && lapTrack.currentTrackId == null && lapTrack.minValidLapDist > 500){
+              const candidatos = guessTrackCandidates(lapTrack.minValidLapDist);
+              const hayEmpate = candidatos.length > 1 && (candidatos[1].diff - candidatos[0].diff) < 0.012;
+              if(hayEmpate && currentPilot === 'matias'){
+                // dos circuitos casi del mismo largo: preguntamos en vez de arriesgar el nombre
+                mostrarAmbiguedadCircuito(candidatos.slice(0,3).map(c => c.id), lapTrack.lastPos, posArr);
+              } else if(candidatos.length > 0){
+                lapTrack.currentTrackId = candidatos[0].id;
+                tryAutoLoadTrackMap(candidatos[0].id);
+              }
+            }
+            // ya sabemos que circuito es (por la libreria, por una puerta aprendida, o por
+            // haber adivinado bien la distancia): si todavia no tenemos su puerta guardada,
+            // la grabamos ahora para reconocerlo al toque la proxima vez
+            if(lapTrack.currentTrackId != null && lapTrack.lastPos){
+              const gates = loadTrackGates();
+              if(!gates[lapTrack.currentTrackId]){
+                saveTrackGate(lapTrack.currentTrackId, posArr[0], posArr[2],
+                  posArr[0]-lapTrack.lastPos[0], posArr[2]-lapTrack.lastPos[2]);
               }
             }
           }
