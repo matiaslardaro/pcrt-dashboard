@@ -291,23 +291,32 @@
   .miniLapEmpty{font-size:11px; color:var(--dim);}
 
   /* center: gear + rpm + speed pill */
-  #colCenter{grid-column:2; grid-row:1; align-items:center; justify-content:center; gap:2px; padding-top:clamp(6px,1.5vh,14px);}
-  #colCenter > .label{margin-bottom:clamp(2px,1vh,10px);}
+  #colCenter{grid-column:2; grid-row:1; align-items:center; justify-content:center; gap:2px; padding-top:clamp(4px,1vh,14px); min-height:0;}
+  #colCenter > .label{margin-bottom:clamp(2px,.6vh,10px);}
   #vGear{
-    font-size:clamp(28px,min(10.5vw,10.5vh),150px); font-weight:800; line-height:.75;
-    color:var(--text); letter-spacing:-.02em; margin-top:0; margin-bottom:clamp(2px,1vh,8px);
+    font-size:clamp(24px,min(8.5vw,8vh),110px); font-weight:800; line-height:.75;
+    color:var(--text); letter-spacing:-.02em; margin-top:0; margin-bottom:clamp(2px,.6vh,8px);
     text-shadow:
       0em .01em 0 #c9ced6, 0em .02em 0 #b6bcc6, 0em .03em 0 #a3aab6,
       0em .04em 0 #9098a6, 0em .05em 0 #7d8696,
       0em .05em .06em rgba(0,0,0,.6),
       0em 0em .18em rgba(0,217,255,.22);
   }
-  #vRpm{font-size:clamp(16px,min(3.5vw,4vh),40px); color:var(--dim); font-weight:600; margin-top:0;}
+  #vRpm{font-size:clamp(14px,min(3vw,3.2vh),34px); color:var(--dim); font-weight:600; margin-top:0;}
   #vRpm.warn{color:var(--amber);}
   #vRpm.red{color:var(--red);}
   #speedPill{
-    margin-top:clamp(4px,1vh,10px); background:var(--panel-2); border:1px solid var(--line);
-    border-radius:999px; padding:clamp(4px,1vh,9px) 30px; display:flex; align-items:baseline; gap:8px;
+    margin-top:clamp(4px,.8vh,10px); background:var(--panel-2); border:1px solid var(--line);
+    border-radius:999px; padding:clamp(4px,.8vh,9px) 30px; display:flex; align-items:baseline; gap:8px;
+  }
+  /* pantallas bajas (celulares en horizontal, ej 667x375): todo se apila muy alto,
+     comprimimos agresivamente para que el speedPill no quede cortado */
+  @media (max-height:480px){
+    #colCenter > .label{display:none;}
+    #vGear{font-size:clamp(18px,7vh,40px); margin-bottom:0;}
+    #vRpm{font-size:clamp(11px,2.6vh,16px);}
+    #speedPill{padding:3px 16px; margin-top:2px; gap:4px;}
+    #vSpeed{font-size:clamp(18px,6vh,34px) !important;}
   }
   #vSpeed{font-size:clamp(24px,min(7vw,7.5vh),90px); font-weight:800; color:var(--cyan);}
   #speedPill .unit{font-size:13px; color:var(--dim); font-weight:600;}
