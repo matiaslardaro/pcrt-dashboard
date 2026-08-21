@@ -230,7 +230,7 @@
   main{
     display:grid;
     grid-template-columns: 0.85fr 1.5fr 0.95fr;
-    grid-template-rows: minmax(0,1fr) auto;
+    grid-template-rows: minmax(0,1fr);
     gap:10px;
     background:transparent;
     flex:1;
@@ -341,41 +341,6 @@
   .sector .sval{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; margin-top:2px; color:var(--text);}
   .sector.purple .sval{color:#c77dff;}
   .sector.green .sval{color:var(--green);}
-
-  /* bottom strip: pedals (segmented, equalizer-style) + graph */
-  #bottomStrip{
-    grid-column:1 / span 3; grid-row:2; display:flex; gap:10px;
-    height:88px;
-  }
-  #pedals{
-    background: linear-gradient(155deg, #14181f 0%, #0a0d12 100%);
-    display:flex; gap:14px; padding:7px 14px; align-items:flex-end; flex-shrink:0;
-    border-radius:14px;
-    box-shadow: 0 0 0 1px rgba(255,59,59,.18), inset 0 0 0 1px rgba(58,123,255,.18), 0 0 16px 1px rgba(255,59,59,.1), inset 0 1px 0 rgba(255,255,255,.04), inset 0 -2px 6px rgba(0,0,0,.5);
-  }
-  .pedal{display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end;}
-  .pedal .track{
-    width:20px; height:56px; display:flex; flex-direction:column-reverse; gap:2px;
-    padding:3px; background:#05070a; border-radius:5px;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,.7);
-  }
-  .pedal .seg{flex:1; border-radius:1px; background:#1a1e26;}
-  .pedal .label{margin-top:2px;}
-  #brakeTrack .seg.lit{background:var(--red); box-shadow:0 0 4px rgba(255,59,59,.6);}
-  #throttleTrack .seg.lit{background:var(--blue); box-shadow:0 0 4px rgba(58,123,255,.6);}
-  #graphCard{
-    background: linear-gradient(155deg, #14181f 0%, #0a0d12 100%);
-    flex:1; padding:6px 10px; position:relative;
-    border-radius:14px;
-    box-shadow: 0 0 0 1px rgba(0,217,255,.22), 0 0 16px 1px rgba(0,217,255,.1), inset 0 1px 0 rgba(255,255,255,.04), inset 0 -2px 6px rgba(0,0,0,.5);
-  }
-  canvas#graph{width:100%; height:100%; display:block;}
-  #graphLegend{
-    position:absolute; top:8px; right:14px; display:flex; gap:12px; font-size:10px;
-    text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
-  }
-  #graphLegend span{display:flex; align-items:center; gap:4px;}
-  #graphLegend .sw{width:8px; height:8px; border-radius:50%;}
 
   /* ---------- debug overlay ---------- */
   #debugBtn{margin-left:2px;}
@@ -787,26 +752,7 @@ async function subirSesionSupabase(entry){
     </div>
   </div>
 
-  <div id="bottomStrip">
-    <div id="pedals">
-      <div class="pedal">
-        <div class="track" id="brakeTrack"></div>
-        <div class="label">Freno</div>
-      </div>
-      <div class="pedal">
-        <div class="track" id="throttleTrack"></div>
-        <div class="label">Acel.</div>
-      </div>
-    </div>
-    <div id="graphCard">
-      <div id="graphLegend">
-        <span><span class="sw" style="background:var(--cyan)"></span>Velocidad</span>
-        <span><span class="sw" style="background:var(--blue)"></span>Acelerador</span>
-        <span><span class="sw" style="background:var(--red)"></span>Freno</span>
-      </div>
-      <canvas id="graph"></canvas>
-    </div>
-  </div>
+
 </main>
 
 <script>
@@ -1149,24 +1095,6 @@ document.getElementById('redline').addEventListener('input', () => {
   document.getElementById('autoTag').style.display = 'none';
 });
 
-const PEDAL_SEGS = 12;
-function buildPedalSegs(trackId){
-  const track = document.getElementById(trackId);
-  for(let i=0;i<PEDAL_SEGS;i++){
-    const s = document.createElement('div');
-    s.className = 'seg';
-    track.appendChild(s);
-  }
-  return [...track.querySelectorAll('.seg')];
-}
-const brakeSegs = buildPedalSegs('brakeTrack');
-const throttleSegs = buildPedalSegs('throttleTrack');
-
-function updatePedalSegs(segs, pct){
-  const lit = Math.round((pct/100) * PEDAL_SEGS);
-  segs.forEach((s,i) => s.classList.toggle('lit', i < lit));
-}
-
 const LED_COUNT = 18;
 const ledsWrap = document.getElementById('leds');
 for(let i=0;i<LED_COUNT;i++){
@@ -1181,14 +1109,6 @@ function pick(obj, ...keys){
     if(obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
   return null;
-}
-
-// GT7 manda throttle/freno en escala 0-255 (byte), no 0-100
-function toPct(raw){
-  if(raw == null) return 0;
-  if(raw <= 1) return raw*100;
-  if(raw <= 100) return raw;
-  return raw/2.55;
 }
 
 // Fuel map relativo: con el consumo promedio de las ultimas vueltas, calcula si la nafta
@@ -1281,62 +1201,6 @@ function updateLeds(rpm, redline){
     }
   });
 }
-
-const canvas = document.getElementById('graph');
-const ctx = canvas.getContext('2d');
-let history = []; // {t, speed, throttle, brake}  throttle/brake en 0-100
-const HISTORY_SECONDS = 12;
-
-function resizeCanvas(){
-  canvas.width = canvas.clientWidth * devicePixelRatio;
-  canvas.height = canvas.clientHeight * devicePixelRatio;
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-function drawFilledTrace(pts, now, w, h, colorRgba, getVal){
-  ctx.beginPath();
-  pts.forEach((p, i) => {
-    const x = w - ((now - p.t)/HISTORY_SECONDS)*w;
-    const y = h - (getVal(p)/100)*h;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  });
-  const lastX = w - ((now - pts[pts.length-1].t)/HISTORY_SECONDS)*w;
-  const firstX = w - ((now - pts[0].t)/HISTORY_SECONDS)*w;
-  ctx.lineTo(lastX, h);
-  ctx.lineTo(firstX, h);
-  ctx.closePath();
-  ctx.fillStyle = colorRgba;
-  ctx.fill();
-}
-
-function drawGraph(){
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0,0,w,h);
-  if(history.length < 2) return;
-
-  const now = Date.now()/1000;
-  const pts = history.filter(p => now - p.t < HISTORY_SECONDS);
-  if(pts.length < 2) return;
-
-  // freno y acelerador: areas rellenas semi-transparentes (0-100%)
-  drawFilledTrace(pts, now, w, h, 'rgba(255,59,59,0.32)', p => p.brake);
-  drawFilledTrace(pts, now, w, h, 'rgba(58,123,255,0.32)', p => p.throttle);
-
-  // velocidad: linea encima, escala propia (0 a maxSpeed)
-  const maxSpeed = Math.max(60, ...pts.map(p=>p.speed));
-  ctx.beginPath();
-  pts.forEach((p, i) => {
-    const x = w - ((now - p.t)/HISTORY_SECONDS)*w;
-    const y = h - (p.speed/maxSpeed)*h*0.92 - h*0.04;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  });
-  ctx.strokeStyle = '#00d9ff';
-  ctx.lineWidth = 2 * devicePixelRatio;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-}
-setInterval(drawGraph, 100);
 
 // ---- delta en vivo: comparamos distancia recorrida contra la mejor vuelta grabada ----
 const lapTrack = {
@@ -1723,8 +1587,6 @@ function connect(){
     const speedKph = pick(d, 'speed_kph', 'speed') ?? (pick(d,'speed_mps') != null ? pick(d,'speed_mps')*3.6 : null);
     const rpm = pick(d, 'engine_rpm', 'rpm');
     const gear = pick(d, 'current_gear', 'gear');
-    const throttle = pick(d, 'throttle', 'accelerator');
-    const brake = pick(d, 'brake');
     let lap = pick(d, 'current_lap', 'lap_count');
     if(lap === -1) lap = null;
     const totalLaps = pick(d, 'total_laps', 'laps_total', 'num_laps');
@@ -1758,13 +1620,8 @@ function connect(){
       document.getElementById('autoTag').style.display = 'inline';
     }
 
-    const throttlePct = toPct(throttle);
-    const brakePct = toPct(brake);
-
     if(speedKph != null){
       document.getElementById('vSpeed').textContent = Math.round(speedKph);
-      history.push({t: Date.now()/1000, speed: speedKph, throttle: throttlePct, brake: brakePct});
-      if(history.length > 900) history.shift();
 
       // acumular tiempo parado (menos de 5 km/h) para detectar pit stops reales, no solo la salida inicial
       const nowT = Date.now();
@@ -1787,9 +1644,6 @@ function connect(){
     }
 
     document.getElementById('vGear').textContent = gear != null ? gear : '-';
-
-    if(throttle != null) updatePedalSegs(throttleSegs, throttlePct);
-    if(brake != null) updatePedalSegs(brakeSegs, brakePct);
 
     const carreraTerminada = (totalLaps != null && totalLaps > 0 && lap != null && lap > totalLaps);
     document.getElementById('vLap').firstChild.textContent = lap != null ? (carreraTerminada ? totalLaps : lap) : '--';
