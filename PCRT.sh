@@ -4,8 +4,8 @@
 #   1. mata procesos viejos colgados
 #   2. levanta pcrt_server.py en background
 #   3. espera a que el server este listo
-#   4. abre el dashboard directo en el navegador, ya instalado como PWA
-#      si "Añadir a pantalla de inicio" se hizo una vez antes
+#   4. abre el dashboard con ?v=<hash del commit>, asi Chrome siempre pide
+#      el HTML nuevo de la red y no queda pegado a una version vieja en cache
 
 CARPETA="$HOME/pcrt"
 LOG="$CARPETA/pcrt_server.log"
@@ -27,6 +27,13 @@ if timeout 6 git pull --quiet 2>/dev/null; then
   fi
 else
   echo "No se pudo buscar actualizaciones (sin internet?), sigo con la version actual"
+fi
+
+# Hash del commit actual, para forzar a Chrome a pedir el HTML de nuevo
+# cada vez que cambia (cache-busting sin tocar nada a mano)
+HASH=$(git rev-parse --short HEAD 2>/dev/null)
+if [ -z "$HASH" ]; then
+  HASH=$(date +%s)
 fi
 
 echo "Iniciando servidor PCRT..."
@@ -69,6 +76,6 @@ if [ -z "$IP" ]; then
   echo "No se pudo detectar la IP de red, usando 127.0.0.1 (solo funciona en este mismo celu)"
 fi
 
-URL="http://$IP:8080/dashboard.html"
+URL="http://$IP:8080/dashboard.html?v=$HASH"
 echo "Abriendo $URL"
 termux-open-url "$URL"
