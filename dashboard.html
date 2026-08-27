@@ -127,16 +127,6 @@
   }
   #shiftBarMask.shiftflash{ animation:flash .15s infinite alternate; }
   @keyframes flash{ from{opacity:1;} to{opacity:.15;} }
-  #liveDeltaWrap{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    background:var(--panel-2); border:2px solid var(--cyan); border-radius:999px;
-    padding:2px 14px; opacity:.45; transition:opacity .15s; white-space:nowrap;
-    box-shadow:0 2px 8px rgba(0,0,0,.5);
-  }
-  #liveDeltaWrap.ready{opacity:1;}
-  #liveDelta{font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:800; color:var(--text);}
-  #liveDelta.faster{color:var(--green);}
-  #liveDelta.slower{color:var(--red);}
 
   /* ---------- full-screen shift alert (marco solido en el borde) ---------- */
   #shiftAlert{
@@ -362,6 +352,10 @@
   .laptime-row.last .val{color:var(--cyan);}
   .laptime-row.diff .val.faster{color:var(--green);}
   .laptime-row.diff .val.slower{color:var(--red);}
+  .laptime-row.live{opacity:.45; transition:opacity .15s;}
+  .laptime-row.live.ready{opacity:1;}
+  .laptime-row.live .val.faster{color:var(--green);}
+  .laptime-row.live .val.slower{color:var(--red);}
   #sectorRow{display:flex; gap:6px; margin-top:10px; justify-content:flex-start;}
   .sector{
     background:var(--panel-2); border-radius:8px; padding:6px 10px; text-align:center; min-width:52px;
@@ -628,7 +622,6 @@ async function subirSesionSupabase(entry){
   </div>
   <div id="shiftBarWrap">
     <div id="shiftBar"><div id="shiftBarMask"></div></div>
-    <div id="liveDeltaWrap"><div id="liveDelta">--</div></div>
   </div>
   <div id="statusWrap">
     <div id="fechaToggle" onclick="toggleModoFecha()">
@@ -705,14 +698,14 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
       <div class="label">Vuelta</div>
       <div class="val mono" id="vLap">--<span class="totalLaps" id="vTotalLaps"></span></div>
     </div>
-    <div class="stat-block" id="miniLapBlock">
-      <div class="label">Tiempos por vuelta</div>
-      <div id="miniLapList"><span class="miniLapEmpty">Todavia sin vueltas</span></div>
-    </div>
     <div id="sectorRow">
       <div class="sector" id="sector0"><div class="label">S1</div><div class="sval">--</div></div>
       <div class="sector" id="sector1"><div class="label">S2</div><div class="sval">--</div></div>
       <div class="sector" id="sector2"><div class="label">S3</div><div class="sval">--</div></div>
+    </div>
+    <div class="stat-block" id="miniLapBlock">
+      <div class="label">Tiempos por vuelta</div>
+      <div id="miniLapList"><span class="miniLapEmpty">Todavia sin vueltas</span></div>
     </div>
   </div>
 
@@ -739,6 +732,10 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
       <div class="laptime-row diff">
         <span class="label">Dif. vs mejor</span>
         <span class="val mono" id="vDelta">--</span>
+      </div>
+      <div class="laptime-row live" id="liveDeltaWrap">
+        <span class="label">Delta en vivo</span>
+        <span class="val mono" id="liveDelta">--</span>
       </div>
     </div>
   </div>
@@ -1338,6 +1335,10 @@ function connect(){
       // solo lo dejamos como estaba y avisamos en el status
       statusText.textContent = isLoading ? 'GT7 cargando...' : 'GT7 en pausa';
       statusText.style.color = 'var(--amber)';
+      // el delta en vivo si se resetea: si no, queda "colgado" con el ultimo valor
+      // mostrado antes de la pausa/carga (bug reportado 27/08/2026)
+      document.getElementById('liveDelta').textContent = '--';
+      document.getElementById('liveDeltaWrap').classList.remove('ready');
       return;
     }
 
