@@ -55,11 +55,11 @@
     color:var(--dim); font-weight:500;
   }
 
-  /* ---------- TOP: brand + LED shift lights + status ---------- */
+  /* ---------- TOP: solo fecha + fullscreen + estado (achicado 27/08/2026: piloto y RPM se mudaron abajo) ---------- */
   #topbar{
-    position:relative; display:flex; align-items:center; gap:14px; padding:6px 14px;
+    position:relative; display:flex; align-items:center; justify-content:flex-end; gap:10px; padding:4px 12px;
     background:var(--panel); border-bottom:1px solid var(--line); flex-shrink:0;
-    overflow:hidden;
+    overflow:hidden; min-height:0;
   }
   #topbar::before{
     content:''; position:absolute; inset:0; opacity:.55; pointer-events:none;
@@ -74,9 +74,11 @@
     background-position:0 0, 0 0, 9px 9px, 9px 9px, 0 0, 0 0;
   }
   #topbar > *{position:relative; z-index:1;}
-  #brand{display:flex; align-items:center; gap:12px; flex-shrink:1; min-width:0;}
+
+  /* ---------- pilotMini: piloto + auto, ahora arriba de todo en colLeft (antes vivia en el topbar) ---------- */
+  #pilotMini{display:flex; align-items:center; gap:10px; flex-shrink:0; margin-bottom:8px;}
   #driverBadge{
-    position:relative; width:44px; height:44px; border-radius:11px;
+    position:relative; width:36px; height:36px; border-radius:9px;
     background: linear-gradient(150deg, var(--pC1, #2f6fe0) 0%, var(--pC2, #0d3fa8) 48%, var(--pC3dark, #051f5c) 100%);
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
     overflow:hidden;
@@ -94,38 +96,44 @@
     box-shadow: 0 0 8px var(--pStripeGlow, rgba(255,214,0,.75)), 0 1px 1px rgba(0,0,0,.3);
   }
   #driverBadge::after{
-    content:''; position:absolute; inset:0; border-radius:11px; pointer-events:none;
+    content:''; position:absolute; inset:0; border-radius:9px; pointer-events:none;
     background: linear-gradient(180deg, rgba(255,255,255,.35) 0%, rgba(255,255,255,0) 45%, rgba(0,0,0,.1) 100%);
   }
   #driverBadge span{
-    position:relative; z-index:1; color:#fff; font-weight:800; font-size:19px;
+    position:relative; z-index:1; color:#fff; font-weight:800; font-size:15px;
     font-family:'Oswald',sans-serif; letter-spacing:-.5px; font-style:italic;
     text-shadow: 0 1px 0 rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.5);
   }
-  #brandText{display:flex; flex-direction:column; justify-content:center; line-height:1.15; position:relative; padding-left:10px; min-width:0; flex-shrink:1;}
+  #brandText{display:flex; flex-direction:column; justify-content:center; line-height:1.15; position:relative; padding-left:8px; min-width:0; flex-shrink:1;}
   #brandText::before{
     content:''; position:absolute; left:0; top:1px; bottom:1px; width:2px;
     background:linear-gradient(180deg, var(--gold), transparent);
   }
-  #brandName{font-size:20px; letter-spacing:.01em; color:var(--text); font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,.5); display:flex; align-items:center; gap:6px; min-width:0;}
-  #brandName img{height:11px; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,.15); flex-shrink:0;}
+  #brandName{font-size:15px; letter-spacing:.01em; color:var(--text); font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,.5); display:flex; align-items:center; gap:5px; min-width:0;}
+  #brandName img{height:10px; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,.15); flex-shrink:0;}
   #brandNameText{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:1; min-width:20px;}
-  #carName{font-size:11px; letter-spacing:.03em; color:var(--cyan); font-weight:600; margin-top:2px; display:flex; align-items:center; gap:5px; min-width:0;}
+
+  /* ---------- carNameBottom: auto, anclado abajo del todo en colLeft ---------- */
+  #carNameBottom{
+    margin-top:auto; flex-shrink:0; padding-top:8px;
+  }
+  #carName{font-size:11px; letter-spacing:.03em; color:var(--cyan); font-weight:600; display:flex; align-items:center; gap:5px; min-width:0;}
   #carName img{height:10px; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,.15); flex-shrink:0;}
   #carName span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 
-  /* ---------- shift bar en gradiente (reemplaza a los puntitos) + delta en vivo flotante ---------- */
-  #shiftBarWrap{position:relative; flex:1; display:flex; align-items:center; min-width:0; height:20px;}
-  #shiftBar{
-    flex:1; height:10px; border-radius:6px; overflow:hidden; position:relative;
-    background:linear-gradient(90deg, var(--green) 0%, var(--green) 48%, var(--amber) 75%, var(--red) 90%, var(--red) 100%);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);
+  /* ---------- shift bar segmentada estilo F1 (reemplaza el gradiente continuo, 27/08/2026), ---------- */
+  /* ahora arriba de "Marcha" en la columna central, en vez de en el topbar */
+  #segBarWrap{width:100%; flex-shrink:0; margin-bottom:clamp(4px,1vh,10px);}
+  #segBar{display:flex; gap:4px; height:16px; width:100%;}
+  #segBar .seg{
+    flex:1; border-radius:3px; background:#1a1e26;
+    box-shadow:inset 0 0 0 1px #000;
+    transition:background .05s linear, box-shadow .08s linear;
   }
-  #shiftBarMask{
-    position:absolute; top:0; right:0; bottom:0; width:100%;
-    background:#1a1e26; transition:width .05s linear;
-  }
-  #shiftBarMask.shiftflash{ animation:flash .15s infinite alternate; }
+  #segBar .seg.lit.green{background:var(--green); box-shadow:0 0 6px var(--green), inset 0 0 0 1px #000;}
+  #segBar .seg.lit.amber{background:var(--amber); box-shadow:0 0 6px var(--amber), inset 0 0 0 1px #000;}
+  #segBar .seg.lit.red{background:var(--red); box-shadow:0 0 8px var(--red), inset 0 0 0 1px #000;}
+  #segBar .seg.flash{animation:flash .13s infinite alternate;}
   @keyframes flash{ from{opacity:1;} to{opacity:.15;} }
 
   /* ---------- full-screen shift alert (marco solido en el borde) ---------- */
@@ -169,9 +177,9 @@
   }
   #statusMenu button:active{background:var(--panel);}
   #fechaToggle{
-    display:flex; flex-direction:column; align-items:center; gap:4px;
+    display:flex; flex-direction:row; align-items:center; gap:6px;
     cursor:pointer; user-select:none; background:var(--panel-2);
-    border:1px solid var(--line); border-radius:6px; padding:5px 9px 6px;
+    border:1px solid var(--line); border-radius:6px; padding:5px 8px;
   }
   #fechaLight{
     width:7px; height:7px; border-radius:50%; background:#3a1414;
@@ -179,18 +187,18 @@
   }
   #fechaToggle.active #fechaLight{background:var(--green); box-shadow:0 0 6px var(--green);}
   #fechaSwitchBody{
-    position:relative; width:22px; height:34px; border-radius:4px;
+    position:relative; width:30px; height:16px; border-radius:8px;
     background:linear-gradient(180deg,#2c313a,#181b20); border:1px solid #000;
     box-shadow:inset 0 1px 2px rgba(0,0,0,.6);
   }
   #fechaLever{
-    position:absolute; left:50%; top:16px; width:11px; height:20px;
-    margin-left:-5.5px; border-radius:3px;
+    position:absolute; left:2px; top:50%; width:12px; height:12px;
+    margin-top:-6px; border-radius:50%;
     background:linear-gradient(90deg,#b8bcc2,#e8ebee,#9aa0a8);
     box-shadow:0 2px 3px rgba(0,0,0,.5);
     transition:transform .15s ease;
   }
-  #fechaToggle.active #fechaLever{transform:translateY(-16px);}
+  #fechaToggle.active #fechaLever{transform:translateX(14px);}
   #fechaLabel{
     font-size:8px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--dim); font-weight:600; transition:color .15s;
@@ -311,6 +319,8 @@
       0em .05em .06em rgba(0,0,0,.6),
       0em 0em .18em rgba(0,217,255,.22);
   }
+  #vGear.flash{ animation:gearFlash .13s infinite alternate; }
+  @keyframes gearFlash{ from{opacity:1;} to{opacity:.35;} }
   #vRpm{font-size:clamp(14px,min(3vw,3.2vh),34px); color:var(--dim); font-weight:600; margin-top:0; flex-shrink:0;}
   #vRpm.warn{color:var(--amber);}
   #vRpm.red{color:var(--red);}
@@ -322,11 +332,17 @@
   /* pantallas bajas (celulares en horizontal, ej 667x375): todo se apila muy alto,
      comprimimos agresivamente para que el speedPill no quede cortado */
   @media (max-height:480px){
+    #segBarWrap{margin-bottom:3px !important;}
+    #segBar{height:10px !important; gap:3px !important;}
     #colCenter > .label{display:none;}
     #vGear{font-size:clamp(18px,7vh,40px); margin-bottom:0;}
     #vRpm{font-size:clamp(11px,2.6vh,16px);}
     #speedPill{padding:3px 16px; margin-top:2px; gap:4px;}
     #vSpeed{font-size:clamp(18px,6vh,34px) !important;}
+    #pilotMini{margin-bottom:4px !important;}
+    #driverBadge{width:28px !important; height:28px !important;}
+    #driverBadge span{font-size:12px !important;}
+    #brandName{font-size:12px !important;}
     #sectorRow{gap:3px !important;}
     .sector{padding:4px 5px !important; min-width:0 !important; flex:1;}
     .sector .label{font-size:8px !important;}
@@ -613,16 +629,6 @@ async function subirSesionSupabase(entry){
 <div id="checkeredFlag"></div>
 
 <div id="topbar">
-  <div id="brand">
-    <div id="driverBadge"><span id="driverBadgeNum">96</span></div>
-    <div id="brandText">
-      <div id="brandName"><img id="brandFlagImg" src="https://flagcdn.com/w40/ar.png" alt="AR"><span id="brandNameText">Matias Lardaro</span></div>
-      <div id="carName"></div>
-    </div>
-  </div>
-  <div id="shiftBarWrap">
-    <div id="shiftBar"><div id="shiftBarMask"></div></div>
-  </div>
   <div id="statusWrap">
     <div id="fechaToggle" onclick="toggleModoFecha()">
       <span id="fechaLight"></span>
@@ -694,6 +700,12 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
 
 <main>
   <div class="card" id="colLeft">
+    <div id="pilotMini">
+      <div id="driverBadge"><span id="driverBadgeNum">96</span></div>
+      <div id="brandText">
+        <div id="brandName"><img id="brandFlagImg" src="https://flagcdn.com/w40/ar.png" alt="AR"><span id="brandNameText">Matias Lardaro</span></div>
+      </div>
+    </div>
     <div class="stat-block">
       <div class="label">Vuelta</div>
       <div class="val mono" id="vLap">--<span class="totalLaps" id="vTotalLaps"></span></div>
@@ -707,9 +719,11 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
       <div class="label">Tiempos por vuelta</div>
       <div id="miniLapList"><span class="miniLapEmpty">Todavia sin vueltas</span></div>
     </div>
+    <div id="carNameBottom"><div id="carName"></div></div>
   </div>
 
   <div class="card" id="colCenter">
+    <div id="segBarWrap"><div id="segBar"></div></div>
     <div class="label">Marcha</div>
     <div class="mono" id="vGear">-</div>
     <div class="mono" id="vRpm">-- RPM</div>
@@ -854,14 +868,33 @@ function mostrarAmbiguedadCircuito(ids, lastPos, crossPos){
   document.getElementById('trackAmbiguityPrompt').classList.add('open');
 }
 
+// shift light segmentada estilo F1 (reemplaza el gradiente continuo, 27/08/2026):
+// segmentos discretos que se van prendiendo de a uno, verde->amarillo->rojo,
+// con los ultimos titilando en zona de corte. Se generan una sola vez al cargar.
+const SEG_COUNT = 14;
+(function initSegBar(){
+  const wrap = document.getElementById('segBar');
+  if(!wrap) return;
+  for(let i=0;i<SEG_COUNT;i++){
+    const d = document.createElement('div');
+    d.className = 'seg';
+    wrap.appendChild(d);
+  }
+})();
+const segEls = document.querySelectorAll('#segBar .seg');
+
 function testShiftAlert(){
   const alertEl = document.getElementById('shiftAlert');
   alertEl.classList.add('active');
-  const mask = document.getElementById('shiftBarMask');
-  if(mask){ mask.style.width = '0%'; mask.classList.add('shiftflash'); }
+  segEls.forEach((s,i) => {
+    s.classList.add('lit', 'flash');
+    s.classList.add(i < SEG_COUNT*0.5 ? 'green' : (i < SEG_COUNT*0.83 ? 'amber' : 'red'));
+  });
+  document.getElementById('vGear').classList.add('flash');
   setTimeout(() => {
     alertEl.classList.remove('active');
-    if(mask) mask.classList.remove('shiftflash');
+    segEls.forEach(s => s.classList.remove('lit','flash','green','amber','red'));
+    document.getElementById('vGear').classList.remove('flash');
   }, 2500);
 }
 
@@ -945,19 +978,28 @@ function updateShiftBorder(pct){
   el.classList.toggle('active', pct >= SHIFT_BORDER_FULL); // el pulso titilante solo en rojo pleno
 }
 
-// shift light en gradiente (reemplaza a los 18 puntitos individuales, 27/08/2026):
-// la barra ya tiene el degrade verde->amarillo->rojo pintado por CSS; aca solo tapamos
-// con una mascara oscura la parte que todavia no se alcanzo en RPM, como un velocimetro.
+// shift light: prende segmentos de a uno (verde->amarillo->rojo) segun el % de RPM
+// hacia el corte, y el numero de marcha titila (sin cambiar de color, decision 27/08/2026)
+// en la misma zona de corte pleno que ya usa el borde de pantalla.
 function updateLeds(rpm, redline){
   const pct = Math.max(0, Math.min(1, rpm / redline));
+  const litCount = Math.round(pct * SEG_COUNT);
   const redZoneStart = 0.83; // mismo punto en el que la logica vieja empezaba el rojo
   const shiftZone = pct >= redZoneStart;
   updateShiftBorder(pct);
-  const mask = document.getElementById('shiftBarMask');
-  if(mask){
-    mask.style.width = ((1 - pct) * 100) + '%';
-    mask.classList.toggle('shiftflash', shiftZone);
-  }
+  segEls.forEach((s,i) => {
+    s.classList.remove('lit','green','amber','red','flash');
+    if(i < litCount){
+      s.classList.add('lit');
+      if(i < SEG_COUNT*0.5) s.classList.add('green');
+      else if(i < SEG_COUNT*redZoneStart) s.classList.add('amber');
+      else s.classList.add('red');
+    }
+    if(shiftZone && i >= SEG_COUNT - 3){
+      s.classList.add('lit','red','flash');
+    }
+  });
+  document.getElementById('vGear').classList.toggle('flash', pct >= SHIFT_BORDER_FULL);
 }
 
 // ---- delta en vivo: comparamos distancia recorrida contra la mejor vuelta grabada ----
@@ -1143,7 +1185,7 @@ function renderLapHistory(){
   }).reverse().join('');
 }
 
-const MINI_LAP_COUNT = 3;
+const MINI_LAP_COUNT = 5;
 function renderMiniLapList(){
   const box = document.getElementById('miniLapList');
   if(!box) return;
@@ -1153,7 +1195,7 @@ function renderMiniLapList(){
   }
   const validas = lapHistory.filter(l => !l.outLap);
   const bestMs = validas.length ? Math.min(...validas.map(l => l.timeMs)) : null;
-  const ultimas = lapHistory.slice(-MINI_LAP_COUNT).reverse();
+  const ultimas = lapHistory.slice(-MINI_LAP_COUNT);
   box.innerHTML = ultimas.map(l => {
     const isBest = !l.outLap && bestMs != null && l.timeMs === bestMs;
     return `<div class="miniLapRow ${isBest ? 'best' : ''}">
