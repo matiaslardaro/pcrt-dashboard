@@ -40,6 +40,44 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 latest = {"connected": False}
 _first_packet_seen = False
 
+# Estado de version del repo, para que el dashboard detecte solo cuando
+# hay una actualizacion nueva sin depender de que alguien reinicie Termux.
+current_version = {"hash": None}
+version_lock = threading.Lock()
+
+
+def get_git_hash():
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=HERE, capture_output=True, text=True, timeout=5,
+        )
+        h = out.stdout.strip()
+        return h if h else None
+    except Exception:
+        return None
+
+
+def git_updater(interval_sec=180):
+    """Corre en background y cada tanto busca actualizaciones del repo,
+    sin depender de que se reinicie el widget de Termux."""
+    while True:
+        try:
+            before = get_git_hash()
+            subprocess.run(
+                ["git", "pull", "--quiet"],
+                cwd=HERE, capture_output=True, text=True, timeout=15,
+            )
+            after = get_git_hash()
+            if after:
+                with version_lock:
+                    current_version["hash"] = after
+                if before and after != before:
+                    print(f"[pcrt_server] Nueva version detectada: {before} -> {after}")
+        except Exception as e:
+            print(f"[pcrt_server] Error buscando actualizaciones: {e}")
+        time.sleep(interval_sec)
+
 
 # ---------------------------------------------------------------------------
 # Limpieza de procesos viejos colgados (bridge / http.server / esta misma
@@ -138,6 +176,19 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Expires", "0")
         super().end_headers()
 
+    def do_GET(self):
+        if self.path.startswith("/version"):
+            with version_lock:
+                h = current_version["hash"] or "unknown"
+            body = json.dumps({"hash": h}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
+
 
 def run_http_server(http_port):
     handler = functools.partial(NoCacheHandler, directory=HERE)
@@ -163,6 +214,10 @@ if __name__ == "__main__":
 
     print("[pcrt_server] Chequeando procesos viejos colgados...")
     kill_old_processes()
+
+    current_version["hash"] = get_git_hash()
+    t_update = threading.Thread(target=git_updater, daemon=True)
+    t_update.start()
 
     t_telem = threading.Thread(target=run_telemetry_client, args=(args.ip,), daemon=True)
     t_telem.start()

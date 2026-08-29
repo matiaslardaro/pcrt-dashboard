@@ -273,22 +273,18 @@
   /* left column: vuelta + tiempos + sectores */
   #colLeft{grid-column:1; grid-row:1; justify-content:flex-start;}
 
-  /* ---------- prompt de ambiguedad de circuito (solo Matias) ---------- */
-  #trackAmbiguityPrompt{
-    display:none; position:fixed; left:50%; top:16px; transform:translateX(-50%); z-index:60;
+
+
+  /* ---------- aviso de version nueva disponible ---------- */
+  #updateBanner{
+    display:none; position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:70;
     background:linear-gradient(155deg, #14181f 0%, #0a0d12 100%);
-    border:1px solid var(--amber); border-radius:14px; padding:14px 18px;
+    border:1px solid var(--amber); border-radius:14px; padding:10px 18px;
     box-shadow: 0 0 0 1px rgba(232,184,48,.3), 0 0 22px 4px rgba(232,184,48,.2);
+    color:var(--amber); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.04em;
     max-width:92vw;
   }
-  #trackAmbiguityPrompt.open{display:block;}
-  #trackAmbiguityPrompt .titulo{font-size:12px; color:var(--amber); font-weight:700; margin-bottom:10px; text-transform:uppercase; letter-spacing:.05em;}
-  #trackAmbiguityPrompt .opciones{display:flex; gap:8px; flex-wrap:wrap;}
-  #trackAmbiguityPrompt button{
-    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
-    padding:9px 16px; border-radius:8px; font-weight:600; font-size:13px;
-  }
-  #trackAmbiguityPrompt button:active{background:var(--amber); color:#1a1300;}
+  #updateBanner.show{display:block;}
   .stat-block{text-align:left;}
   .stat-block .val{font-size:clamp(28px,5vw,46px); font-weight:700; margin-top:2px;}
   #vFuel{color:var(--green);}
@@ -644,10 +640,7 @@ async function subirSesionSupabase(entry){
   </div>
 </div>
 
-<div id="trackAmbiguityPrompt">
-  <div class="titulo">¿Qué circuito es?</div>
-  <div class="opciones" id="trackAmbiguityOpciones"></div>
-</div>
+<div id="updateBanner">Nueva versión disponible, actualizando…</div>
 
 <div id="debugPanel">
   <button onclick="toggleDebug()">Cerrar</button>
@@ -844,29 +837,9 @@ function matchTrackGate(x, z, dx, dz){
   return bestId;
 }
 
-// ---- prompt de "que circuito es" cuando hay empate real por distancia (solo para Matias,
-// que es el unico que pidio que le pregunten en vez de arriesgar un nombre incorrecto) ----
-let ambiguedadResuelta = false; // evita que vuelva a preguntar dentro de la misma sesion
-function mostrarAmbiguedadCircuito(ids, lastPos, crossPos){
-  if(ambiguedadResuelta) return;
-  ambiguedadResuelta = true;
-  const cont = document.getElementById('trackAmbiguityOpciones');
-  cont.innerHTML = ids.map(id => {
-    const nombre = COURSE_NAMES[String(id)] || ('Circuito ' + id);
-    return `<button data-id="${id}">${nombre}</button>`;
-  }).join('');
-  cont.querySelectorAll('button').forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute('data-id');
-      lapTrack.currentTrackId = id;
-      if(lastPos && crossPos){
-        saveTrackGate(id, crossPos[0], crossPos[2], crossPos[0]-lastPos[0], crossPos[2]-lastPos[2]);
-      }
-      document.getElementById('trackAmbiguityPrompt').classList.remove('open');
-    };
-  });
-  document.getElementById('trackAmbiguityPrompt').classList.add('open');
-}
+// ---- ya no preguntamos "que circuito es" en caso de empate por distancia (se saco el
+// cartel, 29/08/2026): ante un empate, directamente nos quedamos con el candidato mas
+// probable y seguimos, sin interrumpir la sesion ----
 
 // shift light segmentada estilo F1 (reemplaza el gradiente continuo, 27/08/2026):
 // segmentos discretos que se van prendiendo de a uno, verde->amarillo->rojo,
@@ -1224,8 +1197,6 @@ function resetLapTrack(prevTotalLaps){
   fuelPerLapHistory = [];
   lapHistory = [];
   sessionStartFuel = null;
-  ambiguedadResuelta = false;
-  document.getElementById('trackAmbiguityPrompt').classList.remove('open');
   renderSectors();
   renderMiniLapList();
 }
@@ -1629,11 +1600,7 @@ function connect(){
             // reconocimos por una puerta aprendida, lo adivinamos por la distancia medida
             if(trackId == null && lapTrack.currentTrackId == null && lapTrack.minValidLapDist > 500){
               const candidatos = guessTrackCandidates(lapTrack.minValidLapDist);
-              const hayEmpate = candidatos.length > 1 && (candidatos[1].diff - candidatos[0].diff) < 0.012;
-              if(hayEmpate && currentPilot === 'matias'){
-                // dos circuitos casi del mismo largo: preguntamos en vez de arriesgar el nombre
-                mostrarAmbiguedadCircuito(candidatos.slice(0,3).map(c => c.id), lapTrack.lastPos, posArr);
-              } else if(candidatos.length > 0){
+              if(candidatos.length > 0){
                 lapTrack.currentTrackId = candidatos[0].id;
               }
             }
@@ -1817,6 +1784,33 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
   });
 }
+
+// ---------- auto-actualizacion: detecta version nueva y recarga solo ----------
+// No depende de que alguien reinicie Termux: pcrt_server.py hace git pull
+// solo en background, y esto compara el hash con el que tiene la pagina
+// cargada ahora mismo (el ?v= con el que se abrio).
+(function(){
+  const miHash = new URLSearchParams(location.search).get('v');
+  if(!miHash) return; // sin hash de referencia, no hay con que comparar
+
+  async function chequearVersion(){
+    try{
+      const res = await fetch('/version', {cache:'no-store'});
+      if(!res.ok) return;
+      const data = await res.json();
+      if(data.hash && data.hash !== 'unknown' && data.hash !== miHash){
+        const banner = document.getElementById('updateBanner');
+        banner.classList.add('show');
+        setTimeout(() => {
+          const url = new URL(location.href);
+          url.searchParams.set('v', data.hash);
+          location.href = url.toString();
+        }, 4000);
+      }
+    }catch(e){ /* sin red por un rato, no pasa nada, reintenta despues */ }
+  }
+  setInterval(chequearVersion, 30000);
+})();
 
 window.onload = () => connect();
 </script>
