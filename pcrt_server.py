@@ -60,12 +60,25 @@ def get_git_hash():
 
 def git_updater(interval_sec=180):
     """Corre en background y cada tanto busca actualizaciones del repo,
-    sin depender de que se reinicie el widget de Termux."""
+    sin depender de que se reinicie el widget de Termux.
+
+    Usa fetch + reset --hard en vez de pull para que la sincronizacion
+    sea a prueba de cambios locales, conflictos o ramas divergidas en
+    el dispositivo de cada piloto (nadie deberia tocar el codigo a mano,
+    pero si pasa, esto lo pisa solo sin que nadie tenga que intervenir)."""
     while True:
         try:
             before = get_git_hash()
             subprocess.run(
-                ["git", "pull", "--quiet"],
+                ["git", "fetch", "--quiet", "origin"],
+                cwd=HERE, capture_output=True, text=True, timeout=15,
+            )
+            subprocess.run(
+                ["git", "reset", "--hard", "--quiet", "origin/main"],
+                cwd=HERE, capture_output=True, text=True, timeout=15,
+            )
+            subprocess.run(
+                ["git", "clean", "-fd", "--quiet"],
                 cwd=HERE, capture_output=True, text=True, timeout=15,
             )
             after = get_git_hash()
