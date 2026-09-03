@@ -124,7 +124,7 @@
   /* ---------- shift bar segmentada estilo F1 (reemplaza el gradiente continuo, 27/08/2026), ---------- */
   /* ahora arriba de "Marcha" en la columna central, en vez de en el topbar */
   #segBarWrap{width:100%; flex-shrink:0; margin-bottom:clamp(4px,1vh,10px);}
-  #segBar{display:flex; gap:4px; height:16px; width:100%;}
+  #segBar{display:flex; gap:5px; height:20px; width:100%;}
   #segBar .seg{
     flex:1; border-radius:3px; background:#1a1e26;
     box-shadow:inset 0 0 0 1px #000;
@@ -306,7 +306,7 @@
   #colCenter{grid-column:2; grid-row:1; align-items:center; justify-content:center; gap:2px; padding-top:clamp(4px,1vh,14px); min-height:0;}
   #colCenter > .label{margin-bottom:clamp(2px,.6vh,10px); flex-shrink:0;}
   #vGear{
-    font-size:clamp(28px,min(8vw,8.5vh),100px); font-weight:800; line-height:1;
+    font-size:clamp(34px,min(10vw,11vh),130px); font-weight:800; line-height:1;
     color:var(--text); letter-spacing:-.02em; margin-top:0; margin-bottom:clamp(2px,.6vh,8px);
     flex-shrink:0;
     text-shadow:
@@ -317,24 +317,24 @@
   }
   #vGear.flash{ animation:gearFlash .13s infinite alternate; }
   @keyframes gearFlash{ from{opacity:1;} to{opacity:.35;} }
-  #vRpm{font-size:clamp(14px,min(3vw,3.2vh),34px); color:var(--dim); font-weight:600; margin-top:0; flex-shrink:0;}
+  #vRpm{font-size:clamp(17px,min(3.6vw,4vh),40px); color:var(--dim); font-weight:600; margin-top:0; flex-shrink:0;}
   #vRpm.warn{color:var(--amber);}
   #vRpm.red{color:var(--red);}
   #speedPill{
-    margin-top:clamp(4px,.8vh,10px); background:var(--panel-2); border:1px solid var(--line);
-    border-radius:999px; padding:clamp(4px,.8vh,9px) 30px; display:flex; align-items:baseline; gap:8px;
+    margin-top:clamp(5px,1vh,12px); background:var(--panel-2); border:1px solid var(--line);
+    border-radius:999px; padding:clamp(5px,1vh,11px) 34px; display:flex; align-items:baseline; gap:8px;
     flex-shrink:0;
   }
   /* pantallas bajas (celulares en horizontal, ej 667x375): todo se apila muy alto,
      comprimimos agresivamente para que el speedPill no quede cortado */
   @media (max-height:480px){
     #segBarWrap{margin-bottom:3px !important;}
-    #segBar{height:10px !important; gap:3px !important;}
+    #segBar{height:13px !important; gap:4px !important;}
     #colCenter > .label{display:none;}
-    #vGear{font-size:clamp(18px,7vh,40px); margin-bottom:0;}
-    #vRpm{font-size:clamp(11px,2.6vh,16px);}
-    #speedPill{padding:3px 16px; margin-top:2px; gap:4px;}
-    #vSpeed{font-size:clamp(18px,6vh,34px) !important;}
+    #vGear{font-size:clamp(22px,9vh,52px); margin-bottom:0;}
+    #vRpm{font-size:clamp(13px,3.2vh,20px);}
+    #speedPill{padding:4px 18px; margin-top:2px; gap:4px;}
+    #vSpeed{font-size:clamp(22px,7.5vh,42px) !important;}
     #pilotMini{margin-bottom:4px !important;}
     #driverBadge{width:28px !important; height:28px !important;}
     #driverBadge span{font-size:12px !important;}
@@ -347,8 +347,8 @@
     .laptime-row{padding:5px 9px !important;}
     .laptime-row .val{font-size:18px !important;}
   }
-  #vSpeed{font-size:clamp(24px,min(7vw,7.5vh),90px); font-weight:800; color:var(--cyan);}
-  #speedPill .unit{font-size:13px; color:var(--dim); font-weight:600;}
+  #vSpeed{font-size:clamp(29px,min(8.5vw,9vh),105px); font-weight:800; color:var(--cyan);}
+  #speedPill .unit{font-size:14px; color:var(--dim); font-weight:600;}
 
   /* right column: lap times agrupados con color por tipo */
   #colRight{grid-column:3; grid-row:1; justify-content:center; align-items:stretch;}
