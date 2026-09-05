@@ -171,7 +171,16 @@ async def ws_handler(websocket):
     print("[pcrt_server] Tablet conectada por WebSocket")
     try:
         while True:
-            await websocket.send(json.dumps(latest))
+            payload = latest
+            # Si hace mas de 4s que no llega un paquete nuevo de la PS5 (UDP cortado,
+            # repetidor con microcortes, etc.), avisamos al dashboard en vez de
+            # mandarle para siempre el ultimo dato bueno como si nada (bug reportado
+            # por Walter: la app queda "tildada" sin que se note).
+            ts = latest.get("_ts")
+            if ts is not None and (time.time() - ts) > 4:
+                payload = dict(latest)
+                payload["connected"] = False
+            await websocket.send(json.dumps(payload))
             await asyncio.sleep(1 / 15)
     except websockets.exceptions.ConnectionClosed:
         print("[pcrt_server] Tablet desconectada")

@@ -1341,6 +1341,18 @@ function connect(){
     const d = JSON.parse(ev.data);
     document.getElementById('debugContent').textContent = JSON.stringify(d, null, 2);
 
+    if(d.connected === false){
+      // el server no recibe paquetes nuevos de la PS5 hace rato (UDP cortado,
+      // repetidor con microcortes, etc.) - avisamos en vez de quedarnos
+      // mostrando en silencio el ultimo dato bueno como si estuviera todo bien
+      document.getElementById('statusDot').classList.remove('on');
+      statusText.textContent = 'Sin señal de la PS5 (revisa wifi/repetidor)';
+      statusText.style.color = 'var(--red)';
+      document.getElementById('liveDelta').textContent = '--';
+      document.getElementById('liveDeltaWrap').classList.remove('ready');
+      return;
+    }
+
     const isPaused = pick(d, 'is_paused');
     const isLoading = pick(d, 'is_loading');
     if(isPaused || isLoading){
