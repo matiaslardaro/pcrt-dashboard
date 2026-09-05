@@ -578,11 +578,26 @@ const PILOT_DRIVER_IDS = {
   walter:  '98174d3e-799e-4f32-be8c-48f84d0253e7'
 };
 
-// sube la sesion a dashboard_sessions si estamos en modo fecha; no bloquea, solo loguea si falla
+// sube la sesion a dashboard_sessions si estamos en modo fecha; no bloquea, solo loguea si falla.
+// idempotente: si ya existe una fila igual (por un reintento tras corte), no duplica.
 async function subirSesionSupabase(entry){
-  const driverId = PILOT_DRIVER_IDS[currentPilot];
+  const driverId = PILOT_DRIVER_IDS[entry.piloto || currentPilot];
   if(!driverId) return;
   try{
+    let q = sbClient.from('dashboard_sessions').select('id')
+      .eq('driver_id', driverId)
+      .eq('track', entry.track)
+      .eq('car', entry.car)
+      .eq('laps_completed', entry.vueltasCompletadas);
+    q = (entry.mejorVuelta === null || entry.mejorVuelta === undefined)
+      ? q.is('best_lap_ms', null)
+      : q.eq('best_lap_ms', entry.mejorVuelta);
+    const { data: existentes, error: errCheck } = await q.limit(1);
+    if(errCheck){ console.error('Error chequeando duplicado en Supabase:', errCheck); return; }
+    if(existentes && existentes.length > 0){
+      marcarSesionSubida(entry.fecha);
+      return;
+    }
     const { error } = await sbClient.from('dashboard_sessions').insert({
       driver_id: driverId,
       es_fecha: entry.esFecha,
@@ -594,9 +609,30 @@ async function subirSesionSupabase(entry){
       best_lap_ms: entry.mejorVuelta,
       laps: entry.laps
     });
-    if(error) console.error('Error subiendo sesion a Supabase:', error);
+    if(error){ console.error('Error subiendo sesion a Supabase:', error); return; }
+    marcarSesionSubida(entry.fecha);
   }catch(e){
     console.error('Error de red subiendo sesion a Supabase:', e);
+  }
+}
+
+// marca como subida (por su timestamp de archivado, unico) una entrada en pcrt_sesionesArchivadas
+function marcarSesionSubida(entryFecha){
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem('pcrt_sesionesArchivadas')) || []; }catch(e){ return; }
+  const idx = archivo.findIndex(e => e.fecha === entryFecha);
+  if(idx === -1) return;
+  archivo[idx].subida = true;
+  try{ localStorage.setItem('pcrt_sesionesArchivadas', JSON.stringify(archivo)); }catch(e){}
+}
+
+// reintenta subir las sesiones de fecha que quedaron marcadas como no subidas (por corte de red, cierre de Chrome, etc.)
+async function reintentarSubidasPendientes(){
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem('pcrt_sesionesArchivadas')) || []; }catch(e){ return; }
+  const pendientes = archivo.filter(e => e.esFecha && !e.subida);
+  for(const entry of pendientes){
+    await subirSesionSupabase(entry);
   }
 }
 </script>
@@ -1096,7 +1132,8 @@ function archivarSesionActual(prevTotalLaps){
       totalLaps: prevTotalLaps,
       vueltasCompletadas: lapHistory.length,
       mejorVuelta: bestMs,
-      laps: lapHistory
+      laps: lapHistory,
+      subida: false
     };
     let archivo = [];
     try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){}
@@ -1781,6 +1818,8 @@ function initPiloto(){
 initPiloto();
 restaurarSesionActual();
 renderModoFecha();
+reintentarSubidasPendientes();
+setInterval(reintentarSubidasPendientes, 120000);
 function hideSplash(){
   const el = document.documentElement;
   const reqFs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
