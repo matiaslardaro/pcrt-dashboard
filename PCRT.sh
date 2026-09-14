@@ -10,6 +10,9 @@
 CARPETA="$HOME/pcrt"
 LOG="$CARPETA/pcrt_server.log"
 
+echo "Pidiendo wake lock (evita que Android frene Termux en segundo plano)..."
+termux-wake-lock 2>/dev/null
+
 echo "Cerrando procesos viejos..."
 pkill -9 -f pcrt_server.py 2>/dev/null
 pkill -9 -f gt7_bridge.py 2>/dev/null
