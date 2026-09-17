@@ -1865,6 +1865,9 @@ if('serviceWorker' in navigator){
       if(!res.ok) return;
       const data = await res.json();
       if(data.hash && data.hash !== 'unknown' && data.hash !== miHash){
+        // si hay una sesion con vueltas en curso, no la interrumpimos con un reload:
+        // esperamos al proximo chequeo (30s) y probamos de nuevo hasta que este libre
+        if(lapHistory.length > 0) return;
         const banner = document.getElementById('updateBanner');
         banner.classList.add('show');
         setTimeout(() => {
