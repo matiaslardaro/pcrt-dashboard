@@ -1282,6 +1282,9 @@ let lastKnownTotalLaps = null; // null = todavia no sabemos; se usa para detecta
 let pendingTotalLaps = null;
 let pendingTotalLapsCount = 0;
 const TOTAL_LAPS_CONFIRM_COUNT = 5; // paquetes seguidos iguales antes de creer que de verdad cambio
+let pendingTrackId = null;
+let pendingTrackIdCount = 0;
+const TRACK_ID_CONFIRM_COUNT = 5; // idem, para no resetear por un trackId glitcheado (ej. al volver a boxes)
 
 let reconnectTimer = null;
 let manualDisconnect = false;
@@ -1547,7 +1550,19 @@ function connect(){
       && pendingTotalLapsCount === TOTAL_LAPS_CONFIRM_COUNT
       && pendingTotalLaps !== lastKnownTotalLaps;
 
-    if(trackId != null && lapTrack.currentTrackId !== null && trackId !== lapTrack.currentTrackId){
+    // mismo debounce que totalLaps: un solo paquete UDP con trackId distinto (glitch al entrar/salir
+    // de boxes, pantalla de carga del garage, etc.) no puede tirar toda la sesion a la basura
+    if(trackId != null && trackId === pendingTrackId){
+      pendingTrackIdCount++;
+    } else if(trackId != null){
+      pendingTrackId = trackId;
+      pendingTrackIdCount = 1;
+    }
+    const cambioCircuito = trackId != null && lapTrack.currentTrackId !== null
+      && pendingTrackIdCount === TRACK_ID_CONFIRM_COUNT
+      && pendingTrackId !== lapTrack.currentTrackId;
+
+    if(cambioCircuito){
       resetLapTrack(lastKnownTotalLaps);
       lastKnownTotalLaps = totalLapsNorm;
     } else if(cambioSesionCarrera){
