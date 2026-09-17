@@ -1861,22 +1861,33 @@ if('serviceWorker' in navigator){
 
   async function chequearVersion(){
     try{
-      const res = await fetch('/version', {cache:'no-store'});
+      // timeout corto: si el server esta a mitad de un restart (git pull en background),
+      // que la promesa no quede esperando para siempre
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch('/version', {cache:'no-store', signal: ctrl.signal});
+      clearTimeout(to);
       if(!res.ok) return;
       const data = await res.json();
       if(data.hash && data.hash !== 'unknown' && data.hash !== miHash){
         // si hay una sesion con vueltas en curso, no la interrumpimos con un reload:
         // esperamos al proximo chequeo (30s) y probamos de nuevo hasta que este libre
         if(lapHistory.length > 0) return;
+        // el WS tiene que estar conectado AHORA: si el server esta reiniciandose
+        // (git pull de background), navegar hacia el puede dejar la pagina colgada
+        // esperando una respuesta que no llega (tildado real, reportado 17/09/2026)
+        if(!ws || ws.readyState !== WebSocket.OPEN) return;
         const banner = document.getElementById('updateBanner');
         banner.classList.add('show');
         setTimeout(() => {
+          // re-chequeo: si en estos 4s el server se cayo, no navegamos a ciegas
+          if(!ws || ws.readyState !== WebSocket.OPEN) return;
           const url = new URL(location.href);
           url.searchParams.set('v', data.hash);
           location.href = url.toString();
         }, 4000);
       }
-    }catch(e){ /* sin red por un rato, no pasa nada, reintenta despues */ }
+    }catch(e){ /* sin red por un rato (o timeout), no pasa nada, reintenta despues */ }
   }
   setInterval(chequearVersion, 30000);
 })();
