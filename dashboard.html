@@ -607,7 +607,8 @@ async function subirSesionSupabase(entry){
       total_laps: entry.totalLaps,
       laps_completed: entry.vueltasCompletadas,
       best_lap_ms: entry.mejorVuelta,
-      laps: entry.laps
+      laps: entry.laps,
+      created_at: new Date(entry.fecha).toISOString() // fecha real de la sesión, no la del momento del insert/migración
     });
     if(error){ console.error('Error subiendo sesion a Supabase:', error); return; }
     marcarSesionSubida(entry.fecha);
