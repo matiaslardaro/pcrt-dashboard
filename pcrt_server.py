@@ -129,7 +129,9 @@ def kill_old_processes():
 # ---------------------------------------------------------------------------
 # Telemetria GT7
 # ---------------------------------------------------------------------------
-async def on_telemetry(t):
+def on_telemetry(t):
+    # sync a proposito: gt-telem crea un event loop NUEVO por paquete (60 por segundo)
+    # para callbacks async; sync es mucho mas liviano y Android tiene menos motivos para matarlo
     global latest, _first_packet_seen
     if not _first_packet_seen:
         _first_packet_seen = True
