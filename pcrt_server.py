@@ -27,6 +27,7 @@ import http.server
 import json
 import os
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -149,19 +150,72 @@ async def watchdog():
         print("[pcrt_server] Revisa: misma red que la PS5, IP correcta, y que GT7 este en pista (no en menus).")
 
 
+# IP de la PS5 que esta usando el cliente (la completa run_telemetry_client).
+ps_ip_actual = {"ip": None}
+
+# Puerto donde GT7 escucha el heartbeat (33339 + 400 para GT7).
+HEARTBEAT_PORT = 33739
+
+
+def heartbeat_keeper(interval_sec=1.0):
+    """Heartbeat propio, a prueba de microcortes de wifi.
+
+    gt-telem manda su heartbeat cada 10s, pero si UN envio falla (wifi que
+    parpadea un segundo -> OSError), esa tarea muere para siempre sin avisar:
+    el proceso sigue abierto, la PS5 deja de mandar telemetria y el dashboard
+    queda tildado hasta reiniciar Termux. Este thread manda el heartbeat cada
+    1s y, si falla, reintenta en el siguiente ciclo en vez de morirse."""
+    sock = None
+    fallos = 0
+    while True:
+        ip = ps_ip_actual["ip"]
+        if ip:
+            try:
+                if sock is None:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(b"A", (ip, HEARTBEAT_PORT))
+                if fallos:
+                    print(f"[pcrt_server] Heartbeat recuperado despues de {fallos} fallos")
+                fallos = 0
+            except OSError as e:
+                fallos += 1
+                if fallos == 1 or fallos % 30 == 0:
+                    print(f"[pcrt_server] Heartbeat fallo ({e}), reintentando...")
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+                sock = None
+        time.sleep(interval_sec)
+
+
 def run_telemetry_client(ps_ip):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    kwargs = {}
-    if ps_ip:
-        kwargs["ps_ip"] = ps_ip
-    try:
-        tc = TurismoClient(**kwargs)
-    except TypeError:
-        tc = TurismoClient()
-    tc.register_callback(on_telemetry)
-    print("[pcrt_server] Escuchando telemetria de GT7...")
-    tc.run()
+    """Si el cliente de gt-telem se cae (o no encuentra la PS5 al arrancar),
+    lo vuelve a levantar solo en vez de dejar el thread muerto."""
+    while True:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            kwargs = {}
+            if ps_ip:
+                kwargs["ps_ip"] = ps_ip
+            try:
+                tc = TurismoClient(**kwargs)
+            except TypeError:
+                tc = TurismoClient()
+            ps_ip_actual["ip"] = getattr(tc, "ip_addr", None) or ps_ip
+            tc.register_callback(on_telemetry)
+            print(f"[pcrt_server] Escuchando telemetria de GT7 (PS5 en {ps_ip_actual['ip']})...")
+            tc.run()
+            print("[pcrt_server] El cliente de telemetria se detuvo, reiniciando en 3s...")
+        except Exception as e:
+            print(f"[pcrt_server] Error en cliente de telemetria ({e}), reintentando en 3s...")
+        try:
+            if not loop.is_closed():
+                loop.close()
+        except Exception:
+            pass
+        time.sleep(3)
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +297,9 @@ if __name__ == "__main__":
 
     t_telem = threading.Thread(target=run_telemetry_client, args=(args.ip,), daemon=True)
     t_telem.start()
+
+    t_hb = threading.Thread(target=heartbeat_keeper, daemon=True)
+    t_hb.start()
 
     t_http = threading.Thread(target=run_http_server, args=(args.http_port,), daemon=True)
     t_http.start()
