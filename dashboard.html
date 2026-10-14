@@ -628,7 +628,13 @@ function marcarSesionSubida(entryFecha){
 }
 
 // reintenta subir las sesiones de fecha que quedaron marcadas como no subidas (por corte de red, cierre de Chrome, etc.)
+let reintentandoSubidas = false;
 async function reintentarSubidasPendientes(){
+  if(reintentandoSubidas) return; // evita dos pasadas en paralelo subiendo la misma sesion
+  reintentandoSubidas = true;
+  try{ await reintentarSubidasPendientesInner(); }finally{ reintentandoSubidas = false; }
+}
+async function reintentarSubidasPendientesInner(){
   let archivo = [];
   try{ archivo = JSON.parse(localStorage.getItem('pcrt_sesionesArchivadas')) || []; }catch(e){ return; }
   const pendientes = archivo.filter(e => e.esFecha && !e.subida);
@@ -1338,7 +1344,12 @@ function connect(){
   localStorage.setItem('pcrt_wsHost', host);
   localStorage.setItem('pcrt_wsPort', port);
   const statusText = document.getElementById('connStatus');
-  if(ws) ws.close();
+  if(ws){
+    // soltamos los handlers del socket viejo antes de cerrarlo: si no, su onclose
+    // agenda un reconnect que a los 3s cierra el socket nuevo, y asi en loop infinito
+    ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null;
+    ws.close();
+  }
   statusText.textContent = 'Conectando...';
   statusText.style.color = 'var(--dim)';
 
@@ -1351,8 +1362,9 @@ function connect(){
     return;
   }
 
+  const sock = ws;
   const openTimeout = setTimeout(() => {
-    if(ws.readyState !== WebSocket.OPEN){
+    if(sock === ws && sock.readyState !== WebSocket.OPEN){
       statusText.textContent = 'No conecta (revisa que el bridge este corriendo y la IP/puerto)';
       statusText.style.color = 'var(--red)';
     }
@@ -1380,7 +1392,10 @@ function connect(){
 
   ws.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
-    document.getElementById('debugContent').textContent = JSON.stringify(d, null, 2);
+    // el JSON formateado es pesado a 15 paquetes/s: solo lo armamos si el panel de debug esta abierto
+    if(document.getElementById('debugPanel').classList.contains('open')){
+      document.getElementById('debugContent').textContent = JSON.stringify(d, null, 2);
+    }
 
     if(d.connected === false){
       // el server no recibe paquetes nuevos de la PS5 hace rato (UDP cortado,
@@ -1882,7 +1897,7 @@ if('serviceWorker' in navigator){
         banner.classList.add('show');
         setTimeout(() => {
           // re-chequeo: si en estos 4s el server se cayo, no navegamos a ciegas
-          if(!ws || ws.readyState !== WebSocket.OPEN) return;
+          if(!ws || ws.readyState !== WebSocket.OPEN){ banner.classList.remove('show'); return; }
           const url = new URL(location.href);
           url.searchParams.set('v', data.hash);
           location.href = url.toString();
