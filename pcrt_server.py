@@ -60,6 +60,21 @@ def get_git_hash():
         return None
 
 
+def get_upstream():
+    """Rama remota que sigue este celu (origin/main en todos los pilotos).
+    Permite probar una version en UNA tablet (cambiandola de rama) sin que el
+    auto-update la vuelva a pisar con main a los 3 minutos."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            cwd=HERE, capture_output=True, text=True, timeout=5,
+        )
+        u = out.stdout.strip()
+        return u if out.returncode == 0 and u.startswith("origin/") else "origin/main"
+    except Exception:
+        return "origin/main"
+
+
 def git_updater(interval_sec=180):
     """Corre en background y cada tanto busca actualizaciones del repo,
     sin depender de que se reinicie el widget de Termux.
@@ -76,7 +91,7 @@ def git_updater(interval_sec=180):
                 cwd=HERE, capture_output=True, text=True, timeout=15,
             )
             subprocess.run(
-                ["git", "reset", "--hard", "--quiet", "origin/main"],
+                ["git", "reset", "--hard", "--quiet", get_upstream()],
                 cwd=HERE, capture_output=True, text=True, timeout=15,
             )
             subprocess.run(
