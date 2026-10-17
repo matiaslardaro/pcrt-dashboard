@@ -25,6 +25,7 @@ import asyncio
 import functools
 import http.server
 import json
+import math
 import os
 import signal
 import socket
@@ -129,6 +130,18 @@ def kill_old_processes():
 # ---------------------------------------------------------------------------
 # Telemetria GT7
 # ---------------------------------------------------------------------------
+def _limpiar(v):
+    # NaN/Infinity no son JSON valido para el navegador: un solo campo asi hace que
+    # el dashboard no pueda leer NINGUN paquete y quede congelado. Los pasamos a None.
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, (list, tuple)):
+        return [_limpiar(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _limpiar(x) for k, x in v.items()}
+    return v
+
+
 def on_telemetry(t):
     # sync a proposito: gt-telem crea un event loop NUEVO por paquete (60 por segundo)
     # para callbacks async; sync es mucho mas liviano y Android tiene menos motivos para matarlo
@@ -137,7 +150,7 @@ def on_telemetry(t):
         _first_packet_seen = True
         print("[pcrt_server] >>> Primer paquete de telemetria recibido de la PS5 <<<")
     try:
-        data = dict(t.as_dict)
+        data = _limpiar(dict(t.as_dict))
     except Exception:
         data = {}
     data["connected"] = True
@@ -236,7 +249,8 @@ async def ws_handler(websocket):
             if ts is not None and (time.time() - ts) > 4:
                 payload = dict(latest)
                 payload["connected"] = False
-            await websocket.send(json.dumps(payload))
+            # default=str: si algun campo raro no se puede pasar a JSON, que no se caiga la conexion
+            await websocket.send(json.dumps(payload, default=str))
             await asyncio.sleep(1 / 15)
     except websockets.exceptions.ConnectionClosed:
         print("[pcrt_server] Tablet desconectada")

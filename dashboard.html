@@ -568,7 +568,8 @@
 <script>
 const SUPABASE_URL = 'https://onedwgygbpmhksiaouun.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eghHyzp21oO1g5Q_FR48yA_kWzA8kal';
-const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// si la red no tiene internet la libreria de Supabase no carga: no rompemos el resto del dashboard
+const sbClient = (typeof supabase !== 'undefined') ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 // mapea la clave de piloto local (dashboard.html) al UUID fijo de la tabla drivers en Supabase
 const PILOT_DRIVER_IDS = {
@@ -582,7 +583,7 @@ const PILOT_DRIVER_IDS = {
 // idempotente: si ya existe una fila igual (por un reintento tras corte), no duplica.
 async function subirSesionSupabase(entry){
   const driverId = PILOT_DRIVER_IDS[entry.piloto || currentPilot];
-  if(!driverId) return;
+  if(!driverId || !sbClient) return; // sin Supabase queda pendiente y se reintenta despues
   try{
     let q = sbClient.from('dashboard_sessions').select('id')
       .eq('driver_id', driverId)
@@ -628,7 +629,7 @@ function marcarSesionSubida(entryFecha){
 }
 
 // reintenta subir las sesiones de fecha que quedaron marcadas como no subidas (por corte de red, cierre de Chrome, etc.)
-let reintentandoSubidas = false;
+var reintentandoSubidas = false;
 async function reintentarSubidasPendientes(){
   if(reintentandoSubidas) return; // evita dos pasadas en paralelo subiendo la misma sesion
   reintentandoSubidas = true;
@@ -1313,6 +1314,22 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// ---- vigilante de conexion "zombie": si la wifi tiene un microcorte, el WebSocket puede
+// quedar "abierto" para el navegador pero sin recibir nada mas, y nunca dispara onclose:
+// el dashboard queda congelado con el punto verde. El server manda datos 15 veces por
+// segundo siempre (aunque la PS5 no mande nada), asi que 5s de silencio = conexion muerta.
+let lastWsMsgAt = 0;
+setInterval(() => {
+  if(document.hidden || manualDisconnect) return;
+  if(ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsMsgAt > 5000){
+    const statusText = document.getElementById('connStatus');
+    statusText.textContent = 'Conexion trabada, reconectando...';
+    statusText.style.color = 'var(--amber)';
+    document.getElementById('statusDot').classList.remove('on');
+    connect();
+  }
+}, 2000);
+
 function scheduleReconnect(){
   if(manualDisconnect) return;
   clearTimeout(reconnectTimer);
@@ -1372,6 +1389,7 @@ function connect(){
 
   ws.onopen = () => {
     clearTimeout(openTimeout);
+    lastWsMsgAt = Date.now();
     statusText.textContent = 'Conectado';
     statusText.style.color = 'var(--green)';
     document.getElementById('statusDot').classList.add('on');
@@ -1391,7 +1409,9 @@ function connect(){
   };
 
   ws.onmessage = (ev) => {
-    const d = JSON.parse(ev.data);
+    lastWsMsgAt = Date.now();
+    let d;
+    try{ d = JSON.parse(ev.data); }catch(e){ return; } // paquete roto: lo salteamos y seguimos con el proximo
     // el JSON formateado es pesado a 15 paquetes/s: solo lo armamos si el panel de debug esta abierto
     if(document.getElementById('debugPanel').classList.contains('open')){
       document.getElementById('debugContent').textContent = JSON.stringify(d, null, 2);
