@@ -284,6 +284,11 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        # no exponer el repo ni el log a la red (solo hace falta servir el dashboard y sus archivos)
+        ruta = self.path.split("?", 1)[0]
+        if ruta.startswith("/.git") or ruta.endswith((".log", ".py", ".sh")):
+            self.send_error(404)
+            return
         if self.path.startswith("/version"):
             with version_lock:
                 h = current_version["hash"] or "unknown"

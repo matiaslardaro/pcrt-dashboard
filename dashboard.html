@@ -755,6 +755,7 @@ async function reintentarSubidasPendientesInner(){
     <div class="dot" id="statusDot" onclick="toggleStatusMenu()"></div>
     <div id="statusMenu">
       <button onclick="cambiarPiloto(); toggleStatusMenu()">👤 Piloto</button>
+      <button onclick="toggleConf(); toggleStatusMenu()">🔌 Conexión</button>
       <button onclick="toggleDebug(); toggleStatusMenu()">🔧 Debug</button>
     </div>
   </div>
@@ -1010,6 +1011,7 @@ function testShiftAlert(){
 
 let redlineManuallySet = false;
 let lastCarCode = null;
+let carNameRenderedFor = null; // el nombre/bandera del auto solo se re-dibuja si cambia el auto (no 15 veces por segundo)
 document.getElementById('redline').addEventListener('input', () => {
   redlineManuallySet = true;
   document.getElementById('autoTag').style.display = 'none';
@@ -1079,9 +1081,9 @@ function updateSlip(wheelRps, tyreRadius, speedMps, throttle, brake){
   if(wheelRps && tyreRadius && speedMps > 5){
     const ratios = wheelRps.map((w,i) => Math.abs(w) * tyreRadius[i] / speedMps);
     if(ratios.every(r => isFinite(r) && r > 0)){
-      // calibramos solo rodando sin frenar ni acelerar a fondo (ahi las ruedas no deberian deslizar)
-      if((brake || 0) < 5 && (throttle || 0) < 200){
-        const ord = [...ratios].sort((a,b) => a-b);
+      // calibramos cuando las 4 ruedas giran parejo (ninguna desliza respecto de las otras) y sin frenar
+      const ord = [...ratios].sort((a,b) => a-b);
+      if((brake || 0) < 5 && ord[3] / ord[0] < 1.08){
         const med = (ord[1] + ord[2]) / 2; // mediana de las 4 ruedas
         slip.calib = slip.calib == null ? med : slip.calib * 0.97 + med * 0.03;
         slip.samples++;
@@ -1187,6 +1189,7 @@ const lapTrack = {
   lapStartTime: null,
   lastPos: null,
   currentDist: 0,
+  movedThisLap: false, // ya supero 30 km/h en esta vuelta (para no contar la espera en la grilla como box)
   lowSpeedMs: 0, // tiempo acumulado con el auto practicamente detenido en la vuelta actual (señal de pit stop)
   lastMsgTime: null,
   currentTrace: [],   // {dist, t(ms)}
@@ -1371,6 +1374,7 @@ function resetLapTrack(prevTotalLaps){
   lapTrack.lastPos = null;
   lapTrack.currentDist = 0;
   lapTrack.lowSpeedMs = 0;
+  lapTrack.movedThisLap = false;
   lapTrack.currentTrace = [];
   lapTrack.bestTrace = null;
   lapTrack.lapDistanceEstimate = null;
@@ -1435,6 +1439,7 @@ let pendingTrackIdCount = 0;
 const TRACK_ID_CONFIRM_COUNT = 5; // idem, para no resetear por un trackId glitcheado (ej. al volver a boxes)
 
 let reconnectTimer = null;
+let fallosSeguidos = 0; // conexiones fallidas seguidas: a la 3ra se vuelve a mostrar el panel de IP/puerto
 let manualDisconnect = false;
 let wakeLock = null;
 
@@ -1482,10 +1487,11 @@ function prefillConnectionFields(){
   const hostInput = document.getElementById('wsHost');
   const portInput = document.getElementById('wsPort');
   if(!hostInput.value.trim()){
-    // Prioridad: 1) ultima IP guardada  2) IP con la que se abrio la pagina  3) localhost
+    // Prioridad: 1) IP con la que se abrio la pagina (el WebSocket corre en el mismo server, y si el
+    // celu cambio de IP la guardada queda vieja)  2) ultima IP guardada  3) localhost
     const saved = localStorage.getItem('pcrt_wsHost');
-    const pageHost = (location.hostname && location.hostname !== '') ? location.hostname : '';
-    hostInput.value = saved || pageHost || 'localhost';
+    const pageHost = (location.protocol.startsWith('http') && location.hostname) ? location.hostname : '';
+    hostInput.value = pageHost || saved || 'localhost';
   }
   if(!portInput.value.trim()){
     portInput.value = localStorage.getItem('pcrt_wsPort') || '8765';
@@ -1529,6 +1535,7 @@ function connect(){
 
   ws.onopen = () => {
     clearTimeout(openTimeout);
+    fallosSeguidos = 0;
     lastWsMsgAt = Date.now();
     statusText.textContent = 'Conectado';
     statusText.style.color = 'var(--green)';
@@ -1537,6 +1544,7 @@ function connect(){
     requestWakeLock();
   };
   ws.onclose = () => {
+    if(++fallosSeguidos >= 3) document.getElementById('conf').classList.remove('collapsed');
     document.getElementById('statusDot').classList.remove('on');
     statusText.textContent = 'Desconectado';
     statusText.style.color = 'var(--red)';
@@ -1628,7 +1636,9 @@ function connect(){
       const nowT = Date.now();
       if(lapTrack.lastMsgTime != null){
         const dt = nowT - lapTrack.lastMsgTime;
-        if(dt > 0 && dt < 2000 && speedKph < 5){
+        if(speedKph > 30) lapTrack.movedThisLap = true;
+        // solo cuenta despues de haberse movido en esta vuelta: esperar la largada en la grilla no es un pit stop
+        if(dt > 0 && dt < 2000 && speedKph < 5 && lapTrack.movedThisLap){
           lapTrack.lowSpeedMs += dt;
         }
       }
@@ -1684,7 +1694,8 @@ function connect(){
     const elStartPos = document.getElementById('vStartPos');
     if(elStartPos) elStartPos.textContent = (startPos != null && startPos > 0) ? '#' + startPos : '--';
 
-    if(carCode != null){
+    if(carCode != null && carCode !== carNameRenderedFor){
+      carNameRenderedFor = carCode;
       const car = CAR_NAMES[String(carCode)];
       if(car){
         const makerName = MAKER_NAMES[String(car.m)];
@@ -1709,7 +1720,7 @@ function connect(){
     const deltaEl = document.getElementById('vDelta');
     if(typeof best === 'number' && best > 0 && typeof last === 'number' && last > 0){
       const diffMs = last - best;
-      const sign = diffMs <= 0 ? '-' : '+';
+      const sign = diffMs < 0 ? '-' : (diffMs > 0 ? '+' : ''); // igual a la mejor: 0.000 sin signo
       deltaEl.textContent = sign + (Math.abs(diffMs)/1000).toFixed(3);
       deltaEl.classList.toggle('faster', diffMs < 0);
       deltaEl.classList.toggle('slower', diffMs > 0);
@@ -1875,6 +1886,7 @@ function connect(){
           lapTrack.currentTrace = [];
           lapTrack.currentDist = 0;
           lapTrack.lowSpeedMs = 0;
+          lapTrack.movedThisLap = false;
           lapTrack.lapStartTime = nowMs;
           lapTrack.lastPos = null;
           lapTrack.lastLapNum = lap;
