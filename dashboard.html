@@ -6,7 +6,7 @@
 <title>GT7 · PCRT Telemetria</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d3fa8">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.jpg">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -123,7 +123,7 @@
 
   /* ---------- shift bar segmentada estilo F1 (reemplaza el gradiente continuo, 27/08/2026), ---------- */
   /* ahora arriba de "Marcha" en la columna central, en vez de en el topbar */
-  #segBarWrap{width:100%; flex-shrink:0; margin-bottom:clamp(4px,1vh,10px);}
+  #segBarWrap{width:100%; flex-shrink:0; margin-bottom:clamp(4px,1vh,10px); padding:0 clamp(14px,2.4vw,28px);} /* deja lugar a las barras de pedales */
   #segBar{display:flex; gap:5px; height:20px; width:100%;}
   #segBar .seg{
     flex:1; border-radius:3px; background:#1a1e26;
@@ -303,7 +303,7 @@
   .miniLapEmpty{font-size:11px; color:var(--dim);}
 
   /* center: gear + rpm + speed pill */
-  #colCenter{grid-column:2; grid-row:1; align-items:center; justify-content:center; gap:2px; padding-top:clamp(4px,1vh,14px); min-height:0;}
+  #colCenter{grid-column:2; grid-row:1; align-items:center; justify-content:center; gap:2px; padding-top:clamp(4px,1vh,14px); min-height:0; position:relative;}
   #colCenter > .label{margin-bottom:clamp(2px,.6vh,10px); flex-shrink:0;}
   #vGear{
     font-size:clamp(40px,min(12vw,15vh),160px); font-weight:800; line-height:1;
@@ -321,7 +321,7 @@
   #vRpm.warn{color:var(--amber);}
   #vRpm.red{color:var(--red);}
   #speedPill{
-    margin-top:clamp(5px,1vh,12px); background:var(--panel-2); border:1px solid var(--line);
+    background:var(--panel-2); border:1px solid var(--line);
     border-radius:999px; padding:clamp(5px,1vh,11px) 34px; display:flex; align-items:baseline; gap:8px;
     flex-shrink:0;
   }
@@ -333,7 +333,14 @@
     #colCenter > .label{display:none;}
     #vGear{font-size:clamp(22px,15vh,90px); margin-bottom:0;}
     #vRpm{font-size:clamp(13px,3.2vh,20px);}
-    #speedPill{padding:4px 18px; margin-top:2px; gap:4px;}
+    #speedPill{padding:4px 18px; gap:4px;}
+    #centerFoot{margin-top:2px; gap:8px;}
+    .tyre{width:28px !important; height:19px !important; font-size:10px !important;}
+    #tyres{gap:2px;}
+    .ast{font-size:8px !important; padding:1px 4px;}
+    #assists{gap:2px;}
+    .pedal{top:8px; bottom:8px; width:5px;}
+    #segBarWrap{padding:0 14px;}
     #vSpeed{font-size:clamp(22px,7.5vh,42px) !important;}
     #pilotMini{margin-bottom:4px !important;}
     #driverBadge{width:28px !important; height:28px !important;}
@@ -350,6 +357,48 @@
   }
   #vSpeed{font-size:clamp(29px,min(8.5vw,9vh),105px); font-weight:800; color:var(--cyan);}
   #speedPill .unit{font-size:14px; color:var(--dim); font-weight:600;}
+
+  /* ---------- pie de la columna central: gomas | velocidad | avisos ---------- */
+  #centerFoot{
+    display:flex; align-items:center; justify-content:center; gap:clamp(8px,2vw,22px);
+    width:100%; margin-top:clamp(5px,1vh,12px); flex-shrink:0;
+  }
+  /* temperatura de gomas: 2x2 como se ven en el auto (DI DD / TI TD) */
+  #tyres{display:grid; grid-template-columns:repeat(2,auto); gap:3px; flex-shrink:0;}
+  .tyre{
+    width:clamp(30px,4.2vw,46px); height:clamp(22px,4.6vh,40px); border-radius:6px;
+    background:#1a1e26; box-shadow:inset 0 0 0 1px #000;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:clamp(10px,1.4vw,14px); color:#fff;
+    transition:background .4s;
+  }
+  .tyre.cold{background:#1f4f8f;}
+  .tyre.ok{background:#1d7a4a;}
+  .tyre.warm{background:#a86d00;}
+  .tyre.hot{background:#b42323;}
+  .tyre.lock{box-shadow:0 0 0 2px var(--red), 0 0 10px var(--red); animation:flash .13s infinite alternate;}
+  .tyre.spin{box-shadow:0 0 0 2px #c77dff, 0 0 10px #c77dff; animation:flash .13s infinite alternate;}
+  /* avisos: control de traccion, rueda bloqueada, rueda patinando */
+  #assists{display:flex; flex-direction:column; gap:3px; flex-shrink:0;}
+  .ast{
+    font-size:clamp(8px,1.1vw,11px); font-weight:600; letter-spacing:.1em; text-align:center;
+    padding:2px 6px; border-radius:4px; color:#3a414d; border:1px solid var(--line);
+  }
+  .ast.on{color:#0a0b0c; border-color:transparent;}
+  #astTcs.on{background:var(--amber);}
+  #astLock.on{background:var(--red); color:#fff;}
+  #astSpin.on{background:#c77dff;}
+  /* acelerador (derecha, verde) y freno (izquierda, rojo): barras finitas a los costados de la marcha */
+  .pedal{
+    position:absolute; top:clamp(10px,2.5vh,22px); bottom:clamp(10px,2.5vh,22px); width:clamp(5px,.8vw,9px);
+    border-radius:5px; background:#1a1e26; box-shadow:inset 0 0 0 1px #000; overflow:hidden;
+  }
+  #pedalBrake{left:clamp(6px,1.2vw,14px);}
+  #pedalThrottle{right:clamp(6px,1.2vw,14px);}
+  .pedal i{position:absolute; left:0; right:0; bottom:0; height:0%; border-radius:5px;}
+  #pedalBrake i{background:var(--red); box-shadow:0 0 8px var(--red);}
+  #pedalThrottle i{background:var(--green); box-shadow:0 0 8px var(--green);}
+
 
   /* right column: lap times agrupados con color por tipo */
   #colRight{grid-column:3; grid-row:1; justify-content:center; align-items:stretch;}
@@ -565,6 +614,31 @@
   }
   .pilotOpt span{ font-weight:700; font-size:14px; color:var(--text); }
   .pilotOpt small{ color:var(--dim); font-size:11px; letter-spacing:.05em; }
+  /* ---------- celular en vertical: marcha/velocidad arriba a todo el ancho, columnas abajo ---------- */
+  @media (orientation:portrait) and (max-width:900px){
+    main{grid-template-columns:1fr 1fr; grid-template-rows:minmax(0,1fr) minmax(0,1.2fr); gap:8px; padding:8px;}
+    #colCenter{grid-column:1 / -1; grid-row:1;}
+    #colLeft{grid-column:1; grid-row:2; padding:10px 12px;}
+    #colRight{grid-column:2; grid-row:2; padding:10px 12px; justify-content:flex-start;}
+    #vGear{font-size:clamp(60px,26vw,150px);}
+    #vRpm{font-size:clamp(14px,4.4vw,24px);}
+    #vSpeed{font-size:clamp(32px,10.5vw,64px);}
+    #speedPill{padding:6px 18px;}
+    .tyre{width:clamp(34px,10vw,46px); height:clamp(26px,7vw,36px); font-size:clamp(11px,3.2vw,14px);}
+    .ast{font-size:clamp(9px,2.6vw,11px);}
+    .pedal{width:7px;}
+    #lapTimesBlock{gap:6px;}
+    .laptime-row{flex-direction:column; align-items:flex-start; gap:1px; padding:6px 10px;}
+    .laptime-row .label{font-size:9px;}
+    .laptime-row .val{font-size:clamp(16px,5.2vw,24px);}
+    .laptime-row.fuel .val{font-size:clamp(14px,4.2vw,20px);}
+    #sectorRow{gap:4px;}
+    .sector{flex:1; min-width:0; padding:5px 3px;}
+    .sector .sval{font-size:clamp(10px,3vw,13px);}
+    .miniLapRow{font-size:13px;}
+    #brandName{font-size:13px;}
+    #conf{flex-wrap:wrap; row-gap:4px;}
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.js"></script>
 <script>
@@ -766,10 +840,23 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
     <div class="label">Marcha</div>
     <div class="mono" id="vGear">-</div>
     <div class="mono" id="vRpm">-- RPM</div>
-    <div id="speedPill">
-      <span class="mono" id="vSpeed">--</span>
-      <span class="unit">KM/H</span>
+    <div id="centerFoot">
+      <div id="tyres" title="Temperatura de gomas (°C)">
+        <div class="tyre" id="tyre0">--</div><div class="tyre" id="tyre1">--</div>
+        <div class="tyre" id="tyre2">--</div><div class="tyre" id="tyre3">--</div>
+      </div>
+      <div id="speedPill">
+        <span class="mono" id="vSpeed">--</span>
+        <span class="unit">KM/H</span>
+      </div>
+      <div id="assists">
+        <span class="ast" id="astTcs">TCS</span>
+        <span class="ast" id="astLock">BLOQ</span>
+        <span class="ast" id="astSpin">PATINA</span>
+      </div>
     </div>
+    <div class="pedal" id="pedalBrake"><i></i></div>
+    <div class="pedal" id="pedalThrottle"><i></i></div>
   </div>
 
   <div class="card" id="colRight">
@@ -960,6 +1047,79 @@ function updateFuelMap(currentFuelPct, lap, totalLaps){
     const margen = vueltasConNafta - lapsRemaining;
     el.classList.add(margen >= 0.5 ? 'ok' : (margen >= 0 ? 'warn' : 'bad'));
   }
+}
+
+// ---- gomas, pedales y avisos ----
+// gt-telem manda las 4 ruedas juntas en listas [DI, DD, TI, TD] (tire_temp, wheel_rps, tire_radius),
+// no como tire_fl_temp etc. Aceptamos tambien la forma {fl,fr,rl,rr} por las dudas.
+function ruedas(v){
+  if(Array.isArray(v) && v.length === 4) return v;
+  if(v && typeof v === 'object' && 'fl' in v) return [v.fl, v.fr, v.rl, v.rr];
+  return null;
+}
+const TYRE_COLD = 55, TYRE_WARM = 95, TYRE_HOT = 110; // °C
+const tyreEls = [0,1,2,3].map(i => document.getElementById('tyre'+i));
+function updateTyreTemps(temps){
+  tyreEls.forEach((el,i) => {
+    const t = temps ? temps[i] : null;
+    el.classList.remove('cold','ok','warm','hot');
+    if(typeof t !== 'number'){ el.textContent = '--'; return; }
+    el.textContent = Math.round(t);
+    el.classList.add(t < TYRE_COLD ? 'cold' : t < TYRE_WARM ? 'ok' : t < TYRE_HOT ? 'warm' : 'hot');
+  });
+}
+
+// bloqueo / patinamiento: velocidad de la superficie de cada goma (giro x radio) contra la velocidad
+// del auto. ~1 = rueda rodando normal; mucho menos frenando = bloqueada; mucho mas acelerando = patina.
+// La relacion se auto-calibra rodando tranquilo, por si las unidades de wheel_rps no son las esperadas.
+const slip = { calib: null, samples: 0, lockUntil: [0,0,0,0], spinUntil: [0,0,0,0] };
+const SLIP_LOCK = 0.80, SLIP_SPIN = 1.20, SLIP_HOLD_MS = 350;
+function updateSlip(wheelRps, tyreRadius, speedMps, throttle, brake){
+  const now = Date.now();
+  if(wheelRps && tyreRadius && speedMps > 5){
+    const ratios = wheelRps.map((w,i) => Math.abs(w) * tyreRadius[i] / speedMps);
+    if(ratios.every(r => isFinite(r) && r > 0)){
+      // calibramos solo rodando sin frenar ni acelerar a fondo (ahi las ruedas no deberian deslizar)
+      if((brake || 0) < 5 && (throttle || 0) < 200){
+        const ord = [...ratios].sort((a,b) => a-b);
+        const med = (ord[1] + ord[2]) / 2; // mediana de las 4 ruedas
+        slip.calib = slip.calib == null ? med : slip.calib * 0.97 + med * 0.03;
+        slip.samples++;
+      }
+      if(slip.calib && slip.samples > 30){
+        ratios.forEach((r,i) => {
+          const n = r / slip.calib;
+          if((brake || 0) > 30 && n < SLIP_LOCK) slip.lockUntil[i] = now + SLIP_HOLD_MS;
+          if((throttle || 0) > 40 && n > SLIP_SPIN) slip.spinUntil[i] = now + SLIP_HOLD_MS;
+        });
+      }
+    }
+  }
+  let anyLock = false, anySpin = false;
+  tyreEls.forEach((el,i) => {
+    const lock = slip.lockUntil[i] > now, spinning = !lock && slip.spinUntil[i] > now;
+    el.classList.toggle('lock', lock);
+    el.classList.toggle('spin', spinning);
+    anyLock = anyLock || lock; anySpin = anySpin || spinning;
+  });
+  document.getElementById('astLock').classList.toggle('on', anyLock);
+  document.getElementById('astSpin').classList.toggle('on', anySpin);
+}
+
+// throttle / brake vienen de 0 a 255
+const pedalThrottleEl = document.querySelector('#pedalThrottle i');
+const pedalBrakeEl = document.querySelector('#pedalBrake i');
+function updatePedals(throttle, brake){
+  const pct = v => (typeof v === 'number' ? Math.max(0, Math.min(100, v / 2.55)) : 0) + '%';
+  pedalThrottleEl.style.height = pct(throttle);
+  pedalBrakeEl.style.height = pct(brake);
+}
+
+function resetCarStatus(){
+  updatePedals(0, 0);
+  slip.lockUntil = [0,0,0,0]; slip.spinUntil = [0,0,0,0];
+  updateSlip(null, null, 0, 0, 0);
+  document.getElementById('astTcs').classList.remove('on');
 }
 
 function showCheckeredFlag(){
@@ -1406,6 +1566,7 @@ function connect(){
       statusText.style.color = 'var(--red)';
       document.getElementById('liveDelta').textContent = '--';
       document.getElementById('liveDeltaWrap').classList.remove('ready');
+      resetCarStatus();
       return;
     }
 
@@ -1420,6 +1581,7 @@ function connect(){
       // mostrado antes de la pausa/carga (bug reportado 27/08/2026)
       document.getElementById('liveDelta').textContent = '--';
       document.getElementById('liveDeltaWrap').classList.remove('ready');
+      resetCarStatus();
       return;
     }
 
@@ -1483,6 +1645,14 @@ function connect(){
     }
 
     document.getElementById('vGear').textContent = gear != null ? gear : '-';
+
+    const throttle = pick(d, 'throttle');
+    const brakePedal = pick(d, 'brake');
+    updatePedals(throttle, brakePedal);
+    updateTyreTemps(ruedas(pick(d, 'tire_temp')));
+    const speedMps = pick(d, 'speed_mps') ?? (speedKph != null ? speedKph / 3.6 : null);
+    updateSlip(ruedas(pick(d, 'wheel_rps')), ruedas(pick(d, 'tire_radius')), speedMps, throttle, brakePedal);
+    document.getElementById('astTcs').classList.toggle('on', pick(d, 'tcs_active') === true);
 
     const carreraTerminada = (totalLaps != null && totalLaps > 0 && lap != null && lap > totalLaps);
     document.getElementById('vLap').firstChild.textContent = lap != null ? (carreraTerminada ? totalLaps : lap) : '--';
@@ -1867,11 +2037,6 @@ function hideSplash(){
   setTimeout(() => document.getElementById('splash').remove(), 600);
 }
 
-if('serviceWorker' in navigator){
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch(() => {});
-  });
-}
 
 // ---------- auto-actualizacion: detecta version nueva y recarga solo ----------
 // No depende de que alguien reinicie Termux: pcrt_server.py hace git pull
