@@ -346,6 +346,7 @@
     #lapTimesBlock{gap:5px !important;}
     .laptime-row{padding:5px 9px !important;}
     .laptime-row .val{font-size:18px !important;}
+    .laptime-row.fuel .val{font-size:13px !important;}
   }
   #vSpeed{font-size:clamp(29px,min(8.5vw,9vh),105px); font-weight:800; color:var(--cyan);}
   #speedPill .unit{font-size:14px; color:var(--dim); font-weight:600;}
@@ -368,6 +369,7 @@
   .laptime-row.live.ready{opacity:1;}
   .laptime-row.live .val.faster{color:var(--green);}
   .laptime-row.live .val.slower{color:var(--red);}
+  .laptime-row.fuel .val{font-size:clamp(13px,2.2vw,24px); white-space:nowrap;}
   #sectorRow{display:flex; gap:6px; margin-top:10px; justify-content:flex-start;}
   .sector{
     background:var(--panel-2); border-radius:8px; padding:6px 10px; text-align:center; min-width:52px;
@@ -376,7 +378,7 @@
   .sector .label{font-size:9px;}
   .sector .sval{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; margin-top:2px; color:var(--text);}
   .sector.purple .sval{color:#c77dff;}
-  .sector.green .sval{color:var(--green);}
+  .sector.slow .sval{color:var(--amber);}
 
   /* ---------- debug overlay ---------- */
   #debugBtn{margin-left:2px;}
@@ -564,7 +566,7 @@
   .pilotOpt span{ font-weight:700; font-size:14px; color:var(--text); }
   .pilotOpt small{ color:var(--dim); font-size:11px; letter-spacing:.05em; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL = 'https://onedwgygbpmhksiaouun.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eghHyzp21oO1g5Q_FR48yA_kWzA8kal';
@@ -726,7 +728,7 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
   <div class="xstat"><div class="label">Turbo</div><div class="val mono" id="vBoost">--</div></div>
   <div class="xstat xstat-dual">
     <div class="xstat-half"><div class="label">Combustible</div><div class="val mono" id="vFuel">--%</div></div>
-    <div class="xstat-half"><div class="label">Nafta p/terminar</div><div class="val mono" id="vFuelMap">--</div></div>
+    <div class="xstat-half"><div class="label">Nafta p/terminar</div><div class="val mono">--</div></div>
   </div>
   <div class="xstat xstat-dual">
     <div class="xstat-half"><div class="label">Autos en pista</div><div class="val mono" id="vCars">--</div></div>
@@ -787,6 +789,10 @@ protegidos en el JS con chequeos de existencia, asi que no rompe nada tenerlos c
       <div class="laptime-row live" id="liveDeltaWrap">
         <span class="label">Delta en vivo</span>
         <span class="val mono" id="liveDelta">--</span>
+      </div>
+      <div class="laptime-row fuel">
+        <span class="label">Nafta</span>
+        <span class="val mono" id="vFuelMap">--</span>
       </div>
     </div>
   </div>
@@ -929,35 +935,30 @@ function pick(obj, ...keys){
   return null;
 }
 
-// Fuel map relativo: con el consumo promedio de las ultimas vueltas, calcula si la nafta
-// que queda alcanza para terminar la carrera (vueltas restantes) con el mapa de motor actual.
+// Nafta: % que queda y para cuantas vueltas alcanza con el consumo promedio de las ultimas vueltas.
+// En carrera de vueltas fijas se pinta verde/amarillo/rojo segun si alcanza para terminar.
 function updateFuelMap(currentFuelPct, lap, totalLaps){
   const el = document.getElementById('vFuelMap');
-  if(!el) return; // esta comentado del layout desde 27/08/2026, no se muestra mas
-  if(currentFuelPct == null || totalLaps == null || totalLaps <= 0 || lap == null || fuelPerLapHistory.length === 0){
-    el.textContent = '--';
-    el.classList.remove('ok', 'warn', 'bad');
-    return;
-  }
-  const avgPerLap = fuelPerLapHistory.reduce((a,b) => a+b, 0) / fuelPerLapHistory.length;
-  const lapsRemaining = Math.max(0, totalLaps - lap + 1); // +1: incluye la vuelta que esta corriendo
-  const fuelNeeded = avgPerLap * lapsRemaining;
-  const margin = currentFuelPct - fuelNeeded;
-
+  if(!el) return;
   el.classList.remove('ok', 'warn', 'bad');
-  if(avgPerLap <= 0){
+  if(currentFuelPct == null){
     el.textContent = '--';
     return;
   }
-  if(margin >= avgPerLap * 0.5){
-    el.textContent = 'ALCANZA (+' + Math.round(margin) + '%)';
-    el.classList.add('ok');
-  } else if(margin >= 0){
-    el.textContent = 'JUSTO (+' + Math.round(margin) + '%)';
-    el.classList.add('warn');
-  } else {
-    el.textContent = 'NO ALCANZA (' + Math.round(margin) + '%)';
-    el.classList.add('bad');
+  const pctTxt = Math.round(currentFuelPct) + '%';
+  const avgPerLap = fuelPerLapHistory.length
+    ? fuelPerLapHistory.reduce((a,b) => a+b, 0) / fuelPerLapHistory.length
+    : 0;
+  if(avgPerLap <= 0){
+    el.textContent = pctTxt; // todavia sin vueltas medidas (o carrera sin consumo)
+    return;
+  }
+  const vueltasConNafta = currentFuelPct / avgPerLap;
+  el.textContent = pctTxt + ' · ' + vueltasConNafta.toFixed(1) + 'v';
+  if(totalLaps != null && totalLaps > 0 && lap != null){
+    const lapsRemaining = Math.max(0, totalLaps - lap + 1); // +1: incluye la vuelta que esta corriendo
+    const margen = vueltasConNafta - lapsRemaining;
+    el.classList.add(margen >= 0.5 ? 'ok' : (margen >= 0 ? 'warn' : 'bad'));
   }
 }
 
@@ -1056,6 +1057,7 @@ const SESSION_STORAGE_KEY = 'pcrt_sesionActual';
 const ARCHIVE_STORAGE_KEY = 'pcrt_sesionesArchivadas';
 const MAX_ARCHIVED_SESSIONS = 50;
 let modoFecha = localStorage.getItem('pcrt_modoFecha') === '1';
+let sesionArchivada = false; // true cuando la carrera ya se archivo/subio al cruzar la meta: evita duplicarla
 let fechaId = localStorage.getItem('pcrt_fechaId') || null;
 
 function toggleModoFecha(){
@@ -1127,6 +1129,7 @@ function restaurarSesionActual(){
 
 // al cerrar una sesion (cambio de circuito o de tipo practica/carrera), archivamos si era carrera de vueltas fijas
 function archivarSesionActual(prevTotalLaps){
+  if(sesionArchivada) return; // ya se archivo al terminar la carrera
   if(lapHistory.length > 0 && prevTotalLaps > 0){
     const validas = lapHistory.filter(l => !l.outLap);
     const bestMs = validas.length ? Math.min(...validas.map(l => l.timeMs)) : null;
@@ -1151,30 +1154,6 @@ function archivarSesionActual(prevTotalLaps){
     if(modoFecha) subirSesionSupabase(entry);
   }
   localStorage.removeItem(SESSION_STORAGE_KEY);
-}
-
-function shareSessionSummary(){
-  if(lapHistory.length === 0){
-    alert('Todavia no completaste ninguna vuelta esta sesion.');
-    return;
-  }
-  const bestMs = Math.min(...lapHistory.map(l => l.timeMs));
-  const totalLapsDone = lapHistory.length;
-  const fuelUsed = (sessionStartFuel !== null && lastFuelPct !== null)
-    ? Math.max(0, Math.round(sessionStartFuel - lastFuelPct))
-    : null;
-
-  let texto = `🏁 Resumen de sesion - Copa PCRT\n`;
-  const pActivo = PILOTS[currentPilot] || PILOTS.matias;
-  texto += `👤 ${pActivo.nombre} (#${pActivo.numero})\n`;
-  if(lastTrackLabel) texto += `📍 ${lastTrackLabel}\n`;
-  if(lastCarLabel) texto += `🚗 ${lastCarLabel}\n`;
-  texto += `\n🔁 Vueltas completadas: ${totalLapsDone}\n`;
-  texto += `⏱️ Mejor vuelta: ${fmtLapTime(bestMs)}\n`;
-  if(fuelUsed !== null) texto += `⛽ Combustible usado: ${fuelUsed}%\n`;
-
-  const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
-  window.open(url, '_blank');
 }
 
 function toggleLapHistory(){
@@ -1225,6 +1204,7 @@ function renderMiniLapList(){
 
 function resetLapTrack(prevTotalLaps){
   archivarSesionActual(prevTotalLaps || 0);
+  sesionArchivada = false;
   lapTrack.lastLapNum = null;
   lapTrack.firstLapNum = null;
   lapTrack.lapStartTime = null;
@@ -1257,7 +1237,7 @@ function renderSectors(){
     const el = document.getElementById('sector' + i);
     const val = el.querySelector('.sval');
     const t = lapTrack.sectorTimes[i];
-    el.classList.remove('purple','green');
+    el.classList.remove('purple','slow');
     if(t == null){
       val.textContent = '--';
     } else {
@@ -1265,7 +1245,7 @@ function renderSectors(){
       const best = lapTrack.bestSectorTimes[i];
       if(best != null){
         if(t <= best) el.classList.add('purple');
-        else el.classList.add('green');
+        else el.classList.add('slow');
       }
     }
   }
@@ -1688,6 +1668,12 @@ function connect(){
             if(document.getElementById('lapHistoryPanel').classList.contains('open')) renderLapHistory();
             renderMiniLapList();
             guardarSesionActual();
+          }
+          // termino la carrera de vueltas fijas: se archiva y se sube ya, sin esperar a la sesion siguiente
+          // (asi se marca como fecha segun la palanca de ahora, y no se pierde si se cierra todo)
+          if(typeof totalLaps === 'number' && totalLaps > 0 && lapTrack.lastLapNum === totalLaps){
+            archivarSesionActual(totalLaps);
+            sesionArchivada = true;
           }
           if(esVueltaValida && lapTrack.currentDist > 100){
             lapTrack.lapDistanceEstimate = lapTrack.currentDist;
