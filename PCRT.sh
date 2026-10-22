@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# PCRT.sh — poner en ~/.shortcuts/ para que aparezca como widget de Termux
-# en la pantalla de inicio. Un solo toque:
+# PCRT.sh — arranca el dashboard. Corre solo cada vez que se abre Termux (lo
+# deja configurado install.sh en ~/.bashrc); tambien sirve como widget de
+# Termux:Widget si alguien lo tiene. Hace:
 #   1. mata procesos viejos colgados
 #   2. levanta pcrt_server.py en background
 #   3. espera a que el server este listo
@@ -20,9 +21,14 @@ pkill -9 -f "http.server" 2>/dev/null
 sleep 1
 
 echo "Buscando actualizaciones..."
-cd "$CARPETA" || exit 1
+if ! cd "$CARPETA"; then
+  echo "No encuentro el dashboard en $CARPETA. Volve a correr el instalador."
+  exit 1
+fi
 ANTES=$(git rev-parse HEAD 2>/dev/null)
-if timeout 6 git pull --quiet 2>/dev/null; then
+# fetch + reset en vez de pull: a prueba de cambios locales o ramas divergidas (igual que el server)
+RAMA=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo origin/main)
+if timeout 15 git fetch --quiet origin 2>/dev/null && git reset --hard --quiet "$RAMA" 2>/dev/null; then
   DESPUES=$(git rev-parse HEAD 2>/dev/null)
   if [ "$ANTES" != "$DESPUES" ]; then
     echo "Hay una version nueva, instalando dependencias..."
@@ -82,3 +88,13 @@ fi
 URL="http://$IP:8080/dashboard.html?v=$HASH"
 echo "Abriendo $URL"
 termux-open-url "$URL"
+
+echo ""
+echo "=========================================="
+echo " PCRT andando. Ya podes ir al navegador."
+echo " Dejá Termux abierto en segundo plano"
+echo " (no lo cierres desde la notificacion)."
+echo ""
+echo " Desde otro celu o tablet en la misma wifi:"
+echo "   http://$IP:8080/dashboard.html"
+echo "=========================================="
