@@ -477,9 +477,12 @@
 
   #vRpm.warn{color:var(--amber);}
   #vRpm.red{color:var(--red);}
-  #vFuelMap.ok{color:var(--green);}
-  #vFuelMap.warn{color:var(--amber);}
-  #vFuelMap.bad{color:var(--red);}
+  /* nafta por nivel: verde > lima > amarillo > naranja > rojo */
+  #vFuelL.f100{color:var(--green);}
+  #vFuelL.f75{color:#a6e22e;}
+  #vFuelL.f50{color:#ffd400;}
+  #vFuelL.f30{color:#ff8a00;}
+  #vFuelL.f15{color:var(--red);}
 
   #dbottom{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:calc(var(--u)*1.6); align-items:stretch; min-height:0;}
   #tyres{display:grid; grid-template-columns:repeat(2,auto); gap:calc(var(--u)*.5);}
@@ -720,7 +723,6 @@ async function reintentarSubidasPendientesInner(){
       <div class="drow"><span class="dlbl">km/h</span><span class="dbig" id="vSpeed">--</span></div>
       <div class="drow"><span class="dlbl">RPM</span><span class="dmid" id="vRpm">--</span></div>
       <div class="drow"><span class="dlbl">Nafta</span><span class="dmid" id="vFuelL">--</span></div>
-      <div class="drow"><span class="dlbl">Alcanza</span><span class="dmid" id="vFuelMap">--</span></div>
     </div>
   </div>
   <div id="dbottom">
@@ -881,41 +883,28 @@ function pick(obj, ...keys){
   return null;
 }
 
-// Nafta: % que queda y para cuantas vueltas alcanza con el consumo promedio de las ultimas vueltas.
-// En carrera de vueltas fijas se pinta verde/amarillo/rojo segun si alcanza para terminar.
-function updateFuelMap(currentFuelPct, lap, totalLaps){
-  const el = document.getElementById('vFuelMap');
+// Nafta: el % se pinta por nivel (verde 100-75, lima 75-50, amarillo 50-30, naranja 30-15, rojo < 15).
+// Debajo de 15% se prende la luz NAFTA y sale una vez el cartel. Con el motor apagado (menus) no se pinta.
+const FUEL_LOW = 15;
+function updateFuelMap(currentFuelPct, motorOn){
+  const el = document.getElementById('vFuelL');
+  const fuelLight = document.getElementById('astFuel');
   if(!el) return;
-  el.classList.remove('ok', 'warn', 'bad');
-  if(currentFuelPct == null){
+  el.classList.remove('f100','f75','f50','f30','f15');
+  fuelLight.classList.remove('on');
+  if(currentFuelPct == null || !motorOn){
     el.textContent = '--';
     return;
   }
-  const avgPerLap = fuelPerLapHistory.length
-    ? fuelPerLapHistory.reduce((a,b) => a+b, 0) / fuelPerLapHistory.length
-    : 0;
-  const fuelLight = document.getElementById('astFuel');
-  fuelLight.classList.remove('on');
-  if(avgPerLap <= 0){
-    el.textContent = '--'; // todavia sin vueltas medidas (o carrera sin consumo)
-    return;
-  }
-  const vueltasConNafta = currentFuelPct / avgPerLap;
-  el.textContent = vueltasConNafta.toFixed(1) + ' v';
-  if(totalLaps != null && totalLaps > 0 && lap != null){
-    const lapsRemaining = Math.max(0, totalLaps - lap + 1); // +1: incluye la vuelta que esta corriendo
-    const margen = vueltasConNafta - lapsRemaining;
-    el.classList.add(margen >= 0.5 ? 'ok' : (margen >= 0 ? 'warn' : 'bad'));
-    if(margen < 0){
-      fuelLight.classList.add('on');
-      showAlarm('fuel', 'Nafta · no llega', 'amber', 1400);
-    }
+  const pct = currentFuelPct;
+  el.textContent = Math.round(pct) + '%';
+  el.classList.add(pct > 75 ? 'f100' : pct > 50 ? 'f75' : pct > 30 ? 'f50' : pct > FUEL_LOW ? 'f30' : 'f15');
+  if(pct <= FUEL_LOW){
+    fuelLight.classList.add('on');
+    showAlarm('fuel', 'Nafta baja', 'amber', 1400);
   }
 }
 
-// ---- gomas, pedales y avisos ----
-// gt-telem manda las 4 ruedas juntas en listas [DI, DD, TI, TD] (tire_temp, wheel_rps, tire_radius),
-// no como tire_fl_temp etc. Aceptamos tambien la forma {fl,fr,rl,rr} por las dudas.
 function ruedas(v){
   if(Array.isArray(v) && v.length === 4) return v;
   if(v && typeof v === 'object' && 'fl' in v) return [v.fl, v.fr, v.rl, v.rr];
@@ -984,7 +973,7 @@ function updatePedals(throttle, brake){
 // alarma a pantalla completa: un cartel de un instante (no se repite mas seguido que ALARM_GAP_MS)
 let alarmTimer = null, lastAlarmAt = {};
 const ALARM_GAP_MS = 2500;
-const ALARM_GAP_BY_KEY = { fuel: 60000 }; // la de nafta, como mucho una vez por minuto
+const ALARM_GAP_BY_KEY = { fuel: 600000 }; // la de nafta baja, una vez (como mucho cada 10 minutos)
 function showAlarm(key, text, color, ms){
   const now = Date.now();
   if(lastAlarmAt[key] && now - lastAlarmAt[key] < (ALARM_GAP_BY_KEY[key] || ALARM_GAP_MS)) return;
@@ -1543,11 +1532,7 @@ function connect(){
       ? (carreraTerminada ? ' / ' + totalLaps + ' FIN' : ' / ' + totalLaps)
       : '';
 
-    const elFuelL = document.getElementById('vFuelL');
-    if(elFuelL && fuel != null){
-      // GT7 manda la nafta sobre una capacidad de 100 (o 5 en electricos): es un porcentaje, no litros
-      elFuelL.textContent = Math.round((fuelCap != null && fuelCap > 0) ? fuel / fuelCap * 100 : fuel) + '%';
-    }
+    // GT7 manda la nafta sobre una capacidad de 100 (o 5 en electricos): es un porcentaje, no litros
     if(fuel != null && fuelCap != null && fuelCap > 0){
       lastFuelPct = (fuel/fuelCap)*100;
       const elFuel = document.getElementById('vFuel');
@@ -1559,7 +1544,7 @@ function connect(){
     }
     if(sessionStartFuel === null && lastFuelPct !== null) sessionStartFuel = lastFuelPct;
     if(lapTrack.fuelAtLapStart === null && lastFuelPct !== null) lapTrack.fuelAtLapStart = lastFuelPct;
-    updateFuelMap(lastFuelPct, lap, totalLaps);
+    updateFuelMap(lastFuelPct, (rpm || 0) > 0);
 
     document.getElementById('vBest').textContent = fmtLapTime(best);
     document.getElementById('vLast').textContent = fmtLapTime(last);
