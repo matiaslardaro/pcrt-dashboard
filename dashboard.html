@@ -1044,7 +1044,8 @@ const lapTrack = {
   movedThisLap: false, // ya supero 30 km/h en esta vuelta (para no contar la espera en la grilla como box)
   lowSpeedMs: 0, // tiempo acumulado con el auto practicamente detenido en la vuelta actual (señal de pit stop)
   lastMsgTime: null,
-  currentTrace: [],   // {dist, t(ms)}
+  currentTrace: [],   // {dist, t(ms), x, y, z} de la vuelta en curso
+  refIdx: 0,          // por donde va la vuelta en curso dentro de la mejor vuelta (para el delta)
   bestTrace: null,
   currentTrackId: null,
   lapDistanceEstimate: null,   // distancia total de una vuelta valida, para ubicar los sectores
@@ -1228,6 +1229,7 @@ function resetLapTrack(prevTotalLaps){
   lapTrack.lowSpeedMs = 0;
   lapTrack.movedThisLap = false;
   lapTrack.currentTrace = [];
+  lapTrack.refIdx = 0;
   lapTrack.bestTrace = null;
   lapTrack.lapDistanceEstimate = null;
   lapTrack.sectorTimes = [null, null, null];
@@ -1267,19 +1269,35 @@ function renderSectors(){
   }
 }
 
-function interpBestTime(trace, dist){
-  if(!trace || trace.length < 2) return null;
-  if(dist <= trace[0].dist) return trace[0].t;
-  if(dist >= trace[trace.length-1].dist) return null;
-  for(let i=1;i<trace.length;i++){
-    if(trace[i].dist >= dist){
-      const p0 = trace[i-1], p1 = trace[i];
-      const span = p1.dist - p0.dist || 1;
-      const frac = (dist - p0.dist) / span;
-      return p0.t + frac * (p1.t - p0.t);
-    }
-  }
-  return null;
+// Delta en vivo por POSICION en la pista (no por metros recorridos): busca en la mejor vuelta el punto
+// mas cercano a donde esta el auto ahora y toma el tiempo de ahi. Asi no se corre si la linea de esta
+// vuelta es mas larga o mas corta que la de la mejor. Busca hacia adelante de donde venia (no salta al
+// otro lado de la pista) y usa la altura, para no confundir puentes/cruces (ej. el 8 de Suzuka).
+const DELTA_MAX_DIST = 40; // m: mas lejos que esto de la linea de referencia (boxes, trompo) no hay delta
+function refTimeAtPosition(trace, x, y, z, fromIdx){
+  if(!trace || trace.length < 2 || trace[0].x == null) return null;
+  const n = trace.length;
+  const d2 = i => { const p = trace[i]; return (p.x-x)**2 + (p.y-y)**2 + (p.z-z)**2; };
+  const buscar = (lo, hi) => {
+    let best = -1, bestD = Infinity;
+    for(let i=Math.max(0,lo); i<=Math.min(n-1,hi); i++){ const d = d2(i); if(d < bestD){ bestD = d; best = i; } }
+    return {best, bestD};
+  };
+  let r = buscar(fromIdx - 10, fromIdx + 90);                       // ventana cerca de donde venia
+  if(r.bestD > DELTA_MAX_DIST**2) r = buscar(fromIdx - 10, n - 1);  // se perdio: busca en el resto de la vuelta
+  if(r.best < 0 || r.bestD > DELTA_MAX_DIST**2) return null;
+  // proyecta sobre el tramo vecino para interpolar el tiempo entre dos puntos grabados
+  const proj = k => {
+    const a = trace[k], b = trace[k+1];
+    const vx = b.x-a.x, vy = b.y-a.y, vz = b.z-a.z, len2 = vx*vx + vy*vy + vz*vz;
+    const f = len2 > 0 ? ((x-a.x)*vx + (y-a.y)*vy + (z-a.z)*vz) / len2 : 0;
+    return {f, t: a.t + Math.max(0, Math.min(1, f)) * (b.t - a.t)};
+  };
+  const i = r.best;
+  let t;
+  if(i < n-1 && (i === 0 || proj(i).f >= 0)) t = proj(i).t;
+  else t = proj(i-1).t;
+  return {t, idx: i};
 }
 
 let lastKnownTotalLaps = null; // null = todavia no sabemos; se usa para detectar practica <-> carrera
@@ -1740,6 +1758,7 @@ function connect(){
           }
           renderSectors();
           lapTrack.currentTrace = [];
+          lapTrack.refIdx = 0;
           lapTrack.currentDist = 0;
           lapTrack.lowSpeedMs = 0;
           lapTrack.movedThisLap = false;
@@ -1759,8 +1778,8 @@ function connect(){
 
       if(lapTrack.lapStartTime != null){
         const elapsed = nowMs - lapTrack.lapStartTime;
-        lapTrack.currentTrace.push({dist: lapTrack.currentDist, t: elapsed});
-        if(lapTrack.currentTrace.length > 3000) lapTrack.currentTrace.shift();
+        lapTrack.currentTrace.push({dist: lapTrack.currentDist, t: elapsed, x: posArr[0], y: posArr[1], z: posArr[2]});
+        if(lapTrack.currentTrace.length > 20000) lapTrack.currentTrace.shift(); // ~20 min a 15 paquetes/s (alcanza para Nordschleife)
 
         // deteccion de cruce de sectores 1 y 2 (el 3 se cierra al completar la vuelta)
         if(lapTrack.lapDistanceEstimate){
@@ -1785,9 +1804,10 @@ function connect(){
     const liveDeltaWrap = document.getElementById('liveDeltaWrap');
     if(lapTrack.bestTrace && lapTrack.currentTrace.length > 0){
       const curPoint = lapTrack.currentTrace[lapTrack.currentTrace.length-1];
-      const refT = interpBestTime(lapTrack.bestTrace, curPoint.dist);
-      if(refT != null){
-        const diff = curPoint.t - refT;
+      const ref = refTimeAtPosition(lapTrack.bestTrace, curPoint.x, curPoint.y, curPoint.z, lapTrack.refIdx);
+      if(ref != null) lapTrack.refIdx = ref.idx;
+      if(ref != null){
+        const diff = curPoint.t - ref.t;
         const sign = diff < 0 ? '−' : '+';
         liveDeltaEl.textContent = sign + (Math.abs(diff)/1000).toFixed(2);
         setDeltaBar(diff);
