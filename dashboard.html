@@ -1545,7 +1545,8 @@ function connect(){
 
     const elFuelL = document.getElementById('vFuelL');
     if(elFuelL && fuel != null){
-      elFuelL.textContent = (fuelCap != null && fuelCap > 0) ? fuel.toFixed(1) + ' L' : Math.round(fuel) + '%';
+      // GT7 manda la nafta sobre una capacidad de 100 (o 5 en electricos): es un porcentaje, no litros
+      elFuelL.textContent = Math.round((fuelCap != null && fuelCap > 0) ? fuel / fuelCap * 100 : fuel) + '%';
     }
     if(fuel != null && fuelCap != null && fuelCap > 0){
       lastFuelPct = (fuel/fuelCap)*100;
