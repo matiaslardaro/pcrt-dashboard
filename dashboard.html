@@ -36,18 +36,7 @@
     margin:0; height:100vh; height:100dvh; color:var(--text);
     font-family:'Oswald',sans-serif; overflow:hidden; -webkit-user-select:none; user-select:none;
   }
-  html{
-    background-color:#000;
-    background-image:
-      linear-gradient(27deg, #101113 5px, transparent 5px),
-      linear-gradient(207deg, #101113 5px, transparent 5px),
-      linear-gradient(27deg, #101113 5px, transparent 5px),
-      linear-gradient(207deg, #101113 5px, transparent 5px),
-      linear-gradient(90deg, #0c0d0e 10px, transparent 10px),
-      linear-gradient(#0c0d0e 25%, transparent 25%, transparent 75%, #0c0d0e 75%, #0c0d0e);
-    background-size:22px 22px;
-    background-position:0 0, 0 0, 11px 11px, 11px 11px, 0 0, 0 0;
-  }
+  html{ background:#000; } /* negro liso, como un display real (y el borde del marco queda limpio) */
   body{display:flex; flex-direction:column; background:transparent;}
   .mono{font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums;}
   .label{
@@ -118,14 +107,16 @@
   #brandName img{height:10px; border-radius:2px; box-shadow:0 0 0 1px rgba(255,255,255,.15); flex-shrink:0;}
   #brandNameText{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:1; min-width:20px;}
 
-  /* ---------- full-screen shift alert (marco solido en el borde) ---------- */
+  /* ---------- marco de cambio: un marco de verdad alrededor del dashboard ----------
+     El body deja siempre un borde negro de --frame y el marco se prende solo en ese borde,
+     asi no se superpone a ningun dato. En celular es mas finito. */
+  :root{ --frame: clamp(7px, 2.2vmin, 20px); }
+  body{ padding: var(--frame); }
   #shiftAlert{
     position:fixed; inset:0; z-index:40; pointer-events:none; opacity:0;
     --shiftColor: var(--red);
-    /* en celular el marco es mas finito para no tapar los datos de los bordes */
-    box-shadow:
-      inset 0 0 0 clamp(6px, 1.8vmin, 22px) var(--shiftColor),
-      inset 0 0 clamp(18px, 5vmin, 60px) clamp(4px, 1.2vmin, 14px) var(--shiftColor);
+    border: var(--frame) solid var(--shiftColor);
+    box-shadow: 0 0 calc(var(--frame) * .9) var(--shiftColor) inset;
     transition: opacity .08s linear;
   }
   #shiftAlert.active{ animation:shiftpulse .14s infinite alternate; }
