@@ -18,8 +18,12 @@ ok(){ echo -e "      ${V}OK${N} $1"; }
 falla(){
   echo ""
   echo -e "${R}ERROR: $1${N}"
+  echo "  Ultimas lineas del detalle:"
+  echo "  ------------------------------------------"
+  tail -n 12 "$LOG" | cut -c1-120
+  echo "  ------------------------------------------"
   echo "  Sacale una captura a esta pantalla y mandasela a Mati."
-  echo "  (El detalle quedo guardado en $LOG)"
+  echo "  (El detalle completo quedo en $LOG)"
   exit 1
 }
 # reintentar <que> <comando...>: hasta 3 intentos, porque la red de Termux a veces falla de a ratos
@@ -42,6 +46,16 @@ echo " ni apagues la pantalla hasta que termine."
 export DEBIAN_FRONTEND=noninteractive
 APT_OPTS=(-y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold")
 
+# instalar_pkgs <paquetes...>: si pkg install falla, arregla lo tipico (dpkg cortado a la mitad,
+# dependencias rotas, indice viejo de un mirror desactualizado -> 404) y prueba otra vez
+instalar_pkgs(){
+  pkg install "${APT_OPTS[@]}" "$@" && return 0
+  echo ">>> fallo pkg install $*, reparando apt/dpkg y refrescando el indice"
+  dpkg --force-confdef --force-confold --configure -a
+  apt-get "${APT_OPTS[@]}" --fix-broken install
+  apt-get update && apt-get install "${APT_OPTS[@]}" "$@"
+}
+
 paso 1 "Actualizando Termux..."
 reintentar "la actualizacion" pkg update "${APT_OPTS[@]}" \
   || falla "No se pudo actualizar Termux. Revisa que el celu tenga internet y volve a pegar el comando."
@@ -50,7 +64,7 @@ reintentar "la actualizacion" pkg upgrade "${APT_OPTS[@]}" \
 ok "Termux al dia"
 
 paso 2 "Instalando Python y git..."
-reintentar "la instalacion" pkg install "${APT_OPTS[@]}" python git \
+reintentar "la instalacion" instalar_pkgs python git \
   || falla "No se pudieron instalar Python y git."
 ok "Python y git instalados"
 
@@ -71,7 +85,7 @@ paso 4 "Instalando las librerias de la telemetria (lo que mas tarda)..."
 if ! reintentar "la instalacion" pip install gt-telem websockets; then
   # la libreria que descifra los datos de la PS5 a veces hay que compilarla: instalamos el compilador y probamos de nuevo
   echo "      instalando el compilador y probando de nuevo..."
-  reintentar "la instalacion" pkg install "${APT_OPTS[@]}" clang make binutils \
+  reintentar "la instalacion" instalar_pkgs clang make binutils \
     && reintentar "la instalacion" pip install gt-telem websockets \
     || falla "No se pudieron instalar las librerias de Python."
 fi
