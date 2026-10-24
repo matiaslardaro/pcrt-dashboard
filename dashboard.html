@@ -1439,9 +1439,9 @@ function connect(){
     const ahora = Date.now();
     if(corteVueltaPerdida){
       // volvio de un menu o una carga: la vuelta que venia ya no se puede cronometrar bien,
-      // arrancamos el reloj de nuevo desde aca (no sirve de referencia para el delta)
+      // el reloj arranca de nuevo cuando el auto se mueva (no sirve de referencia para el delta)
       if(lapTrack.lapStartTime != null){
-        lapTrack.lapStartTime = ahora;
+        lapTrack.lapStartTime = null;
         lapTrack.currentTrace = [];
         lapTrack.currentDist = 0;
         lapTrack.refIdx = 0;
@@ -1648,6 +1648,7 @@ function connect(){
 
     // ---- tracking de posicion: mapa de circuito + delta en vivo ----
     const nowMs = Date.now();
+    const autoEnMovimiento = speedKph != null && speedKph > 3;
 
     // si cambiamos de circuito, la vuelta de referencia vieja ya no sirve: reseteamos todo
     const totalLapsNorm = (totalLaps != null && totalLaps > 0) ? totalLaps : 0;
@@ -1710,7 +1711,8 @@ function connect(){
         if(lapTrack.lastLapNum === null){
           lapTrack.lastLapNum = lap;
           lapTrack.firstLapNum = lap;   // esta vuelta puede ser salida de boxes: nunca sirve de referencia
-          lapTrack.lapStartTime = nowMs;
+          // en la grilla GT7 ya manda "vuelta 1" con el auto parado: el reloj arranca recien cuando se mueve (abajo)
+          lapTrack.lapStartTime = autoEnMovimiento ? nowMs : null;
         } else if(lap !== lapTrack.lastLapNum){
           // guardamos cuanta nafta consumio la vuelta que se acaba de completar (para el fuel map relativo)
           if(lapTrack.fuelAtLapStart != null && lastFuelPct != null){
@@ -1818,6 +1820,13 @@ function connect(){
         lapTrack.currentDist += Math.sqrt(dx*dx + dy*dy + dz*dz);
       }
       lapTrack.lastPos = posArr;
+
+      // largada: el auto estaba parado esperando (grilla, o volviendo de un menu) y recien ahora arranca
+      if(lapTrack.lapStartTime == null && lapTrack.lastLapNum !== null && autoEnMovimiento){
+        lapTrack.lapStartTime = nowMs;
+        lapTrack.currentDist = 0;
+        lapTrack.currentTrace = [];
+      }
 
       if(lapTrack.lapStartTime != null){
         const elapsed = nowMs - lapTrack.lapStartTime;
