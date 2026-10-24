@@ -840,8 +840,9 @@ const LED_COUNT = 15, LED_START = 0.72, LED_SHIFT = 0.98;
 const ledEls = document.querySelectorAll('#leds .led');
 
 function paintLeds(pct){
-  const shift = pct >= LED_SHIFT;
   const lit = Math.round((pct - LED_START) / (LED_SHIFT - LED_START) * LED_COUNT);
+  // apenas se prende el primer azul ya es punto de cambio: todos azules titilando
+  const shift = pct >= LED_SHIFT || lit > 10;
   ledEls.forEach((el,i) => {
     el.className = 'led';
     if(shift) el.classList.add('on','b','fl');
@@ -1822,8 +1823,12 @@ function connect(){
       }
       lapTrack.lastPos = posArr;
 
+      // carrera terminada (cruzo la meta de la ultima vuelta): el reloj se frena, la vuelta de enfriamiento no se cronometra
+      const finCarrera = carreraTerminada || sesionArchivada;
+      if(finCarrera) lapTrack.lapStartTime = null;
+
       // largada: el auto estaba parado esperando (grilla, o volviendo de un menu) y recien ahora arranca
-      if(lapTrack.lapStartTime == null && lapTrack.lastLapNum !== null && autoEnMovimiento){
+      if(!finCarrera && lapTrack.lapStartTime == null && lapTrack.lastLapNum !== null && autoEnMovimiento){
         lapTrack.lapStartTime = nowMs;
         lapTrack.currentDist = 0;
         lapTrack.currentTrace = [];
@@ -1883,6 +1888,8 @@ function connect(){
     if(lapTrack.lapStartTime != null){
       const t = (nowMs - lapTrack.lapStartTime) / 1000;
       curEl.textContent = Math.floor(t / 60) + ':' + (t % 60).toFixed(1).padStart(4, '0');
+    } else if((carreraTerminada || sesionArchivada) && typeof last === 'number' && last > 0){
+      curEl.textContent = fmtLapTime(last); // carrera terminada: queda fija la ultima vuelta
     } else {
       curEl.textContent = '--';
     }
