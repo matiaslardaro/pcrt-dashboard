@@ -654,6 +654,7 @@ async function reintentarSubidasPendientesInner(){
       <button onclick="toggleLapHistory(); toggleStatusMenu()">⏱ Vueltas</button>
       <button onclick="toggleConf(); toggleStatusMenu()">🔌 Conexión</button>
       <button onclick="toggleDebug(); toggleStatusMenu()">🔧 Debug</button>
+      <div id="verTag" style="font-size:11px; color:var(--dim); padding:6px 10px; text-align:center;">versión --</div>
     </div>
   </div>
 </div>
@@ -1995,8 +1996,9 @@ function hideSplash(){
 // solo en background, y esto compara el hash con el que tiene la pagina
 // cargada ahora mismo (el ?v= con el que se abrio).
 (function(){
-  const miHash = new URLSearchParams(location.search).get('v');
-  if(!miHash) return; // sin hash de referencia, no hay con que comparar
+  // abierto sin ?v= (icono de la pantalla de inicio, URL a mano): antes no se actualizaba nunca;
+  // ahora tomamos como referencia la version que tenia el server en el primer chequeo
+  let miHash = new URLSearchParams(location.search).get('v');
 
   async function chequearVersion(){
     try{
@@ -2008,6 +2010,10 @@ function hideSplash(){
       clearTimeout(to);
       if(!res.ok) return;
       const data = await res.json();
+      if(!miHash){
+        if(data.hash && data.hash !== 'unknown'){ miHash = data.hash; mostrarVersion(); }
+        return;
+      }
       if(data.hash && data.hash !== 'unknown' && data.hash !== miHash){
         // si hay una sesion con vueltas en curso, no la interrumpimos con un reload:
         // esperamos al proximo chequeo (30s) y probamos de nuevo hasta que este libre
@@ -2028,6 +2034,9 @@ function hideSplash(){
       }
     }catch(e){ /* sin red por un rato (o timeout), no pasa nada, reintenta despues */ }
   }
+  function mostrarVersion(){ document.getElementById('verTag').textContent = 'versión ' + (miHash || '--'); }
+  mostrarVersion();
+  if(!miHash) chequearVersion();
   setInterval(chequearVersion, 30000);
 })();
 
