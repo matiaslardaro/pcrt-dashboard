@@ -1334,6 +1334,8 @@ document.addEventListener('visibilitychange', () => {
 // el dashboard queda congelado con el punto verde. El server manda datos 15 veces por
 // segundo siempre (aunque la PS5 no mande nada), asi que 5s de silencio = conexion muerta.
 let lastWsMsgAt = 0;
+let corteDesde = null;          // desde cuando estamos en pausa/menu/sin señal
+let corteVueltaPerdida = false; // true si el corte fue menu/carga (la vuelta en curso ya no vale)
 setInterval(() => {
   if(document.hidden || manualDisconnect) return;
   if(ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsMsgAt > 5000){
@@ -1426,6 +1428,40 @@ function connect(){
     statusText.style.color = 'var(--red)';
   };
 
+  // pausa / menu / sin señal: el cronometro de vuelta se calcula contra el reloj, asi que
+  // al volver a pista hay que descontar el tiempo parado (si no, sigue "corriendo" en el menu)
+  function marcarCorte(perdioVuelta){
+    if(corteDesde == null) corteDesde = Date.now();
+    if(perdioVuelta) corteVueltaPerdida = true;
+  }
+  function retomarTrasCorte(){
+    if(corteDesde == null) return;
+    const ahora = Date.now();
+    if(corteVueltaPerdida){
+      // volvio de un menu o una carga: la vuelta que venia ya no se puede cronometrar bien,
+      // arrancamos el reloj de nuevo desde aca (no sirve de referencia para el delta)
+      if(lapTrack.lapStartTime != null){
+        lapTrack.lapStartTime = ahora;
+        lapTrack.currentTrace = [];
+        lapTrack.currentDist = 0;
+        lapTrack.refIdx = 0;
+        lapTrack.lastPos = null;
+        lapTrack.sectorTimes = [null, null, null];
+        lapTrack.currentSectorIdx = 0;
+        lapTrack.firstLapNum = lapTrack.lastLapNum;
+      }
+    } else if(lapTrack.lapStartTime != null){
+      // pausa corta: corremos el inicio de vuelta para que el reloj siga donde quedo
+      lapTrack.lapStartTime += ahora - corteDesde;
+    }
+    lapTrack.lastMsgTime = null;
+    document.getElementById('statusDot').classList.add('on');
+    statusText.textContent = 'Conectado';
+    statusText.style.color = 'var(--green)';
+    corteDesde = null;
+    corteVueltaPerdida = false;
+  }
+
   ws.onmessage = (ev) => {
     lastWsMsgAt = Date.now();
     let d;
@@ -1436,6 +1472,7 @@ function connect(){
     }
 
     if(d.connected === false){
+      marcarCorte(false);
       // el server no recibe paquetes nuevos de la PS5 hace rato (UDP cortado,
       // repetidor con microcortes, etc.) - avisamos en vez de quedarnos
       // mostrando en silencio el ultimo dato bueno como si estuviera todo bien
@@ -1450,10 +1487,14 @@ function connect(){
 
     const isPaused = pick(d, 'is_paused');
     const isLoading = pick(d, 'is_loading');
-    if(isPaused || isLoading){
+    // en los menus GT7 sigue mandando paquetes, pero con cars_on_track en false
+    const enMenu = pick(d, 'cars_on_track') === false;
+    if(isPaused || isLoading || enMenu){
       // el juego esta en menu/pausa/cargando: no pisamos el HUD con datos viejos/basura,
       // solo lo dejamos como estaba y avisamos en el status
-      statusText.textContent = isLoading ? 'GT7 cargando...' : 'GT7 en pausa';
+      marcarCorte(enMenu || isLoading);
+      if(enMenu || isLoading) document.getElementById('vCur').textContent = '--';
+      statusText.textContent = isLoading ? 'GT7 cargando...' : (enMenu ? 'GT7 en menú' : 'GT7 en pausa');
       statusText.style.color = 'var(--amber)';
       // el delta en vivo si se resetea: si no, queda "colgado" con el ultimo valor
       // mostrado antes de la pausa/carga (bug reportado 27/08/2026)
@@ -1462,6 +1503,8 @@ function connect(){
       resetCarStatus();
       return;
     }
+
+    retomarTrasCorte();
 
     const speedKph = pick(d, 'speed_kph', 'speed') ?? (pick(d,'speed_mps') != null ? pick(d,'speed_mps')*3.6 : null);
     const rpm = pick(d, 'engine_rpm', 'rpm');
