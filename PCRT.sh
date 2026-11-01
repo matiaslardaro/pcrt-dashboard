@@ -3,7 +3,7 @@
 # deja configurado install.sh en ~/.bashrc); tambien sirve como widget de
 # Termux:Widget si alguien lo tiene. Hace:
 #   1. mata procesos viejos colgados
-#   2. levanta pcrt_server.py en background
+#   2. levanta pcrt_server.py en background (via pcrt_vigia.sh, que lo reinicia si se cae)
 #   3. espera a que el server este listo
 #   4. abre el dashboard con ?v=<hash del commit>, asi Chrome siempre pide
 #      el HTML nuevo de la red y no queda pegado a una version vieja en cache
@@ -15,6 +15,7 @@ echo "Pidiendo wake lock (evita que Android frene Termux en segundo plano)..."
 termux-wake-lock 2>/dev/null
 
 echo "Cerrando procesos viejos..."
+pkill -9 -f pcrt_vigia.sh 2>/dev/null
 pkill -9 -f pcrt_server.py 2>/dev/null
 pkill -9 -f gt7_bridge.py 2>/dev/null
 pkill -9 -f "http.server" 2>/dev/null
@@ -47,7 +48,9 @@ fi
 
 echo "Iniciando servidor PCRT..."
 cd "$CARPETA" || exit 1
-nohup python pcrt_server.py > "$LOG" 2>&1 &
+: > "$LOG"
+# lo corre el vigia: si Android mata el server en segundo plano, lo vuelve a levantar solo
+nohup bash pcrt_vigia.sh > /dev/null 2>&1 &
 
 # Esperar a que el servidor HTTP realmente conteste (no solo confiar en el log), maximo ~15s
 LISTO=0

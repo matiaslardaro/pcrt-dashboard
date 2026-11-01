@@ -684,6 +684,7 @@ async function reintentarSubidasPendientesInner(){
   <input id="wsPort" placeholder="Puerto" value="8765">
   <button onclick="connect()">Conectar</button>
   <span id="connStatus" class="label"></span>
+  <a id="abrirTermux" href="intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.termux/.app.TermuxActivity;end" style="display:none;background:var(--red);color:#fff;font-weight:700;padding:6px 12px;border-radius:6px;text-decoration:none;white-space:nowrap">ABRIR TERMUX</a>
   <div class="sp"></div>
   <label>Limite RPM</label>
   <input id="redline" value="7000">
@@ -1349,6 +1350,19 @@ setInterval(() => {
   }
 }, 2000);
 
+// sin conexion con el server: no dejamos velocidad/RPM/marcha clavados con el ultimo dato,
+// que parece que el dash se tildo cuando en realidad se cayo el server de Termux
+function limpiarHud(){
+  document.getElementById('vSpeed').textContent = '--';
+  document.getElementById('vRpm').textContent = '--';
+  document.getElementById('vGear').textContent = '-';
+  document.getElementById('liveDelta').textContent = '--';
+  document.getElementById('liveDeltaWrap').classList.remove('ready');
+  paintLeds(0);
+  updateShiftBorder(0);
+  resetCarStatus();
+}
+
 function scheduleReconnect(){
   if(manualDisconnect) return;
   clearTimeout(reconnectTimer);
@@ -1410,6 +1424,7 @@ function connect(){
   ws.onopen = () => {
     clearTimeout(openTimeout);
     fallosSeguidos = 0;
+    document.getElementById('abrirTermux').style.display = 'none';
     lastWsMsgAt = Date.now();
     statusText.textContent = 'Conectado';
     statusText.style.color = 'var(--green)';
@@ -1420,7 +1435,11 @@ function connect(){
   ws.onclose = () => {
     if(++fallosSeguidos >= 3) document.getElementById('conf').classList.remove('collapsed');
     document.getElementById('statusDot').classList.remove('on');
-    statusText.textContent = 'Desconectado';
+    limpiarHud();
+    statusText.textContent = fallosSeguidos >= 3 ? 'Server caido: toca ABRIR TERMUX'
+      : (fallosSeguidos >= 2 ? 'Server caido, reintentando solo...' : 'Desconectado');
+    // Android mato Termux entero: el vigia no lo puede levantar, hay que abrir la app (corre PCRT.sh de nuevo)
+    document.getElementById('abrirTermux').style.display = fallosSeguidos >= 3 ? 'inline-block' : 'none';
     statusText.style.color = 'var(--red)';
     scheduleReconnect();
   };
