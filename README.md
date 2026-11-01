@@ -62,6 +62,7 @@ Los datos llegan cuando estás en pista, no en los menús. Se actualiza solo cua
 |---|---|
 | Dice "esperando" y no aparecen datos | Revisá que el celu esté en la misma wifi que la PS5 y que GT7 esté en pista. |
 | Se corta al rato | Ajustes > Apps > Termux > Batería > **Sin restricciones**. |
+| Dice "Server caido, reintentando solo..." | Android cerró el server de Termux; se levanta solo en unos segundos. Si pasa seguido: Ajustes > Apps > Termux > Batería > **Sin restricciones**, y en Android 14+ Opciones de desarrollador > **Desactivar restricciones de procesos secundarios**. |
 | Quedó algo raro | Volvé a pegar el comando del paso 2 en Termux. Se puede hacer las veces que haga falta. |
 | Mis carreras no aparecen en la web | Fijate que la palanca **FECHA** esté prendida (dice REGISTRANDO) antes de largar. |
 | Tengo iPhone | No se puede instalar. Podés ver el dashboard de otro celu o tablet que ya lo tenga: abrí en Safari la dirección que muestra Termux en ese equipo (empieza con `http://192.168…`). |
@@ -73,5 +74,5 @@ Los datos llegan cuando estás en pista, no en los menús. Se actualiza solo cua
 - `pcrt_server.py`: recibe la telemetría de la PS5 (con [gt-telem](https://github.com/RaceCrewAI/gt-telem)), la manda por WebSocket (puerto 8765) y sirve el dashboard (puerto 8080). Cada 3 minutos se actualiza solo desde la rama `main`.
 - `dashboard.html`: el display. Sube las carreras a Supabase (tabla `dashboard_sessions`) cuando la palanca FECHA está prendida.
 - `install.sh`: instalador de un comando. Deja configurado que `PCRT.sh` corra solo al abrir Termux (bloque `# >>> PCRT >>>` en `~/.bashrc`; borrarlo para que no arranque solo). El detalle de la instalación queda en `~/pcrt-instalacion.log`.
-- `PCRT.sh`: arranca el server y abre el dashboard. También sirve como widget de Termux:Widget.
+- `PCRT.sh`: arranca el server (a través de `pcrt_vigia.sh`, que lo reinicia si Android lo mata; cada caída queda en `~/pcrt/pcrt_server.log` con su código) y abre el dashboard. También sirve como widget de Termux:Widget.
 - Autos nuevos de GT7: la lista sale de [ddm999/gt7info](https://github.com/ddm999/gt7info) (`cars.csv`). Si aparece "Auto #… (no identificado)", hay que actualizar `CAR_NAMES` en `dashboard.html`.

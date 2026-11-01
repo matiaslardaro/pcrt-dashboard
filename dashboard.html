@@ -1349,6 +1349,19 @@ setInterval(() => {
   }
 }, 2000);
 
+// sin conexion con el server: no dejamos velocidad/RPM/marcha clavados con el ultimo dato,
+// que parece que el dash se tildo cuando en realidad se cayo el server de Termux
+function limpiarHud(){
+  document.getElementById('vSpeed').textContent = '--';
+  document.getElementById('vRpm').textContent = '--';
+  document.getElementById('vGear').textContent = '-';
+  document.getElementById('liveDelta').textContent = '--';
+  document.getElementById('liveDeltaWrap').classList.remove('ready');
+  paintLeds(0);
+  updateShiftBorder(0);
+  resetCarStatus();
+}
+
 function scheduleReconnect(){
   if(manualDisconnect) return;
   clearTimeout(reconnectTimer);
@@ -1420,7 +1433,8 @@ function connect(){
   ws.onclose = () => {
     if(++fallosSeguidos >= 3) document.getElementById('conf').classList.remove('collapsed');
     document.getElementById('statusDot').classList.remove('on');
-    statusText.textContent = 'Desconectado';
+    limpiarHud();
+    statusText.textContent = fallosSeguidos >= 2 ? 'Server caido, reintentando solo...' : 'Desconectado';
     statusText.style.color = 'var(--red)';
     scheduleReconnect();
   };
