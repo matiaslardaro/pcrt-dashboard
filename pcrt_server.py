@@ -235,6 +235,28 @@ def heartbeat_keeper(interval_sec=1.0):
         time.sleep(interval_sec)
 
 
+class ClienteLiviano(TurismoClient):
+    """TurismoClient de gt-telem, pero gastando mucha menos CPU (para que Android no mate Termux):
+    - la PS5 manda 60 paquetes/s y al dashboard le mandamos 15: descartamos los sobrantes
+      ANTES de descifrarlos y parsearlos (gt-telem procesa los 60).
+    - el callback se llama directo, sin crear un thread por paquete."""
+    _ultimo_procesado = 0.0
+
+    def _handle_data(self, data):
+        ahora = time.monotonic()
+        if ahora - self._ultimo_procesado < 1 / 20:
+            return
+        self._ultimo_procesado = ahora
+        super()._handle_data(data)
+
+    def _invoke_callbacks(self, telemetry_value):
+        for callback in list(self._telem_update_callbacks):
+            try:
+                callback(telemetry_value)
+            except Exception as e:
+                print(f"[pcrt_server] Error procesando paquete: {e}")
+
+
 def run_telemetry_client(ps_ip):
     """Si el cliente de gt-telem se cae (o no encuentra la PS5 al arrancar),
     lo vuelve a levantar solo en vez de dejar el thread muerto."""
@@ -246,9 +268,9 @@ def run_telemetry_client(ps_ip):
             if ps_ip:
                 kwargs["ps_ip"] = ps_ip
             try:
-                tc = TurismoClient(**kwargs)
+                tc = ClienteLiviano(**kwargs)
             except TypeError:
-                tc = TurismoClient()
+                tc = ClienteLiviano()
             ps_ip_actual["ip"] = getattr(tc, "ip_addr", None) or ps_ip
             tc.register_callback(on_telemetry)
             print(f"[pcrt_server] Escuchando telemetria de GT7 (PS5 en {ps_ip_actual['ip']})...")
