@@ -39,7 +39,6 @@ from gt_telem import TurismoClient
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Estado compartido entre el thread de telemetria y el server WS.
-latest = {"connected": False}
 _first_packet_seen = False
 
 # Estado de version del repo, para que el dashboard detecte solo cuando
@@ -157,20 +156,37 @@ def _limpiar(v):
     return v
 
 
+# ultimo paquete crudo de la PS5 (objeto Telemetry + hora de llegada). Se guarda tal cual:
+# convertirlo a dict/JSON se hace recien al mandarlo, 15 veces por segundo y no 60.
+# Menos CPU en segundo plano = menos motivos para que Android mate Termux.
+ultimo_paquete = (None, None)
+_cache = {"ts": None, "data": None}
+
+
 def on_telemetry(t):
     # sync a proposito: gt-telem crea un event loop NUEVO por paquete (60 por segundo)
     # para callbacks async; sync es mucho mas liviano y Android tiene menos motivos para matarlo
-    global latest, _first_packet_seen
+    global ultimo_paquete, _first_packet_seen
     if not _first_packet_seen:
         _first_packet_seen = True
         print("[pcrt_server] >>> Primer paquete de telemetria recibido de la PS5 <<<")
-    try:
-        data = _limpiar(dict(t.as_dict))
-    except Exception:
-        data = {}
-    data["connected"] = True
-    data["_ts"] = time.time()
-    latest = data
+    ultimo_paquete = (t, time.time())
+
+
+def armar_latest():
+    """dict listo para mandar con el ultimo paquete (se arma una sola vez por paquete nuevo)."""
+    t, ts = ultimo_paquete
+    if t is None:
+        return {"connected": False}
+    if _cache["ts"] != ts:
+        try:
+            data = _limpiar(dict(t.as_dict))
+        except Exception:
+            data = {}
+        data["connected"] = True
+        data["_ts"] = ts
+        _cache["data"], _cache["ts"] = data, ts
+    return _cache["data"]
 
 
 async def watchdog():
@@ -249,12 +265,13 @@ def run_telemetry_client(ps_ip):
 
 
 # ---------------------------------------------------------------------------
-# WebSocket (retransmite 'latest' a los dashboards conectados)
+# WebSocket (retransmite el ultimo paquete a los dashboards conectados)
 # ---------------------------------------------------------------------------
 async def ws_handler(websocket):
     print("[pcrt_server] Tablet conectada por WebSocket")
     try:
         while True:
+            latest = armar_latest()
             payload = latest
             # Si hace mas de 4s que no llega un paquete nuevo de la PS5 (UDP cortado,
             # repetidor con microcortes, etc.), avisamos al dashboard en vez de
