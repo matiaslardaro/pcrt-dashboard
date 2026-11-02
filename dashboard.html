@@ -1494,7 +1494,7 @@ function connect(){
     limpiarHud();
     // a los 3 fallos es probable que Android haya cerrado Termux entero: el vigia no lo puede levantar,
     // hay que abrir la app a mano (Chrome no deja abrir Termux desde la pagina)
-    statusText.textContent = fallosSeguidos >= 3 ? 'Server caido: abri Termux'
+    statusText.textContent = fallosSeguidos >= 3 ? 'Server caido: reabri la app PCRT (o Termux)'
       : (fallosSeguidos >= 2 ? 'Server caido, reintentando solo...' : 'Desconectado');
     statusText.style.color = 'var(--red)';
     scheduleReconnect();
