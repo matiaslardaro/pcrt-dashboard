@@ -6,7 +6,22 @@ Cada carrera que corras con la palanca **FECHA** prendida se sube sola a la web 
 
 ---
 
-## Cómo instalarlo
+## App de Android (nueva, reemplaza a Termux)
+
+La app hace todo sola: recibe la telemetría de la PS5 y muestra el dashboard en pantalla completa. A diferencia de Termux, Android no la cierra en segundo plano (corre como servicio con notificación fija).
+
+1. En la tablet, abrí en Chrome: **https://github.com/matiaslardaro/pcrt-dashboard/releases/download/app/pcrt.apk**
+2. Cuando termine de bajar, tocá el archivo y **Instalar**. Si Android pregunta si permitís instalar apps desde Chrome, tocá **Permitir**.
+3. Abrí **PCRT**. Si pregunta por notificaciones o batería, tocá **Permitir** en las dos.
+4. Elegí tu piloto, prendé **FECHA** como siempre y listo.
+
+El dashboard se actualiza solo como antes. Para cerrar la app del todo: en la notificación, **Cerrar**.
+
+> Con la app instalada no hace falta Termux. Si querés, desinstalalo (o dejalo de respaldo).
+
+---
+
+## Cómo instalarlo con Termux (método anterior)
 
 Se hace **una sola vez** y tarda unos 10 minutos. Solo para **Android**.
 
@@ -70,6 +85,8 @@ Los datos llegan cuando estás en pista, no en los menús. Se actualiza solo cua
 ---
 
 ## Para el que mantiene el proyecto
+
+- `android/`: app de Android (Java, sin dependencias). `Puente.java` hace lo mismo que `pcrt_server.py` (descubre la PS5, heartbeat, descifra con Salsa20, WebSocket 8765 + HTTP 8080, baja `dashboard.html` de `main` cada 3 min). El workflow `App Android` compila el APK y, desde `main`, lo publica en el release `app`. Para que los APK nuevos se instalen encima de los viejos hay que cargar los secretos `PCRT_KEYSTORE` (keystore en base64) y `PCRT_KEYSTORE_PASS`; sin ellos se firma con una clave temporal.
 
 - `pcrt_server.py`: recibe la telemetría de la PS5 (con [gt-telem](https://github.com/RaceCrewAI/gt-telem)), la manda por WebSocket (puerto 8765) y sirve el dashboard (puerto 8080). Cada 3 minutos se actualiza solo desde la rama `main`.
 - `dashboard.html`: el display. Sube las carreras a Supabase (tabla `dashboard_sessions`) cuando la palanca FECHA está prendida.
