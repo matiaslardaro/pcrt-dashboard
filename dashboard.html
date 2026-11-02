@@ -1096,6 +1096,11 @@ let lastFuelPct = null;
 let sessionStartFuel = null;
 let lastCarLabel = '';
 let lastTrackLabel = '';
+// auto y circuito con los que se corrieron las vueltas de la sesion: se anotan al cerrar cada vuelta.
+// No se usa lastCarLabel al archivar porque, si la sesion se archiva al cargar la carrera siguiente,
+// para ese momento ya es el auto de la proxima carrera (bug del 01/11: Porsche anotado como Scirocco)
+let sesionCarLabel = '';
+let sesionTrackLabel = '';
 
 // ---- modo fecha: cuando esta activo, las sesiones de carrera (vueltas fijas) se archivan como oficiales ----
 const SESSION_STORAGE_KEY = 'pcrt_sesionActual';
@@ -1133,8 +1138,8 @@ function guardarSesionActual(){
   const snapshot = {
     trackId: lapTrack.currentTrackId,
     totalLaps: lastKnownTotalLaps || 0,
-    track: lastTrackLabel,
-    car: lastCarLabel,
+    track: sesionTrackLabel || lastTrackLabel,
+    car: sesionCarLabel || lastCarLabel,
     piloto: currentPilot,
     esFecha: modoFecha,
     lapHistory: lapHistory,
@@ -1158,6 +1163,8 @@ function restaurarSesionActual(){
   fuelPerLapHistory = s.fuelPerLapHistory || [];
   lastTrackLabel = s.track || '';
   lastCarLabel = s.car || '';
+  sesionTrackLabel = s.track || '';
+  sesionCarLabel = s.car || '';
   lapTrack.currentTrackId = s.trackId;
   // si no restauramos esto, el chequeo de "la vuelta bajo" nunca tiene con que comparar
   // despues de un reload, y una sesion vieja contaminada queda pegada para siempre
@@ -1182,8 +1189,8 @@ function archivarSesionActual(prevTotalLaps){
       fecha: Date.now(),
       esFecha: modoFecha,
       fechaId: fechaId,
-      track: lastTrackLabel,
-      car: lastCarLabel,
+      track: sesionTrackLabel || lastTrackLabel,
+      car: sesionCarLabel || lastCarLabel,
       piloto: currentPilot,
       totalLaps: prevTotalLaps,
       vueltasCompletadas: lapHistory.length,
@@ -1299,6 +1306,8 @@ function resetLapTrack(prevTotalLaps){
   lapTrack.minValidLapDist = null;
   fuelPerLapHistory = [];
   lapHistory = [];
+  sesionCarLabel = '';
+  sesionTrackLabel = '';
   sessionStartFuel = null;
   renderSectors();
   renderMiniLapList();
@@ -1834,6 +1843,11 @@ function connect(){
             const paroEnBoxes = lapTrack.lowSpeedMs > 3000; // mas de 3s casi detenido: pit stop real
             const esSalidaDeBoxes = paroEnBoxes; // el label BOX depende solo de una parada real, no de ser la primera vuelta vista
             const yaRegistrada = lapHistory.some(l => l.lapNum === lapTrack.lastLapNum);
+            if(!yaRegistrada){
+              // el auto/circuito de la sesion son los de cuando se cerraron sus vueltas
+              if(lastCarLabel) sesionCarLabel = lastCarLabel;
+              if(lastTrackLabel) sesionTrackLabel = lastTrackLabel;
+            }
             if(!yaRegistrada) lapHistory.push({
               lapNum: lapTrack.lastLapNum,
               timeMs: last,
