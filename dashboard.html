@@ -1179,10 +1179,41 @@ function toggleLapHistory(){
   renderLapHistory();
 }
 
+// carreras que quedaron guardadas en esta tablet sin subir (ej. FECHA estaba apagada): se pueden subir a mano
+function htmlCarrerasSinSubir(){
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){}
+  const pendientes = archivo.filter(e => !e.subida).slice().reverse();
+  if(!pendientes.length) return '';
+  return `<div class="label" style="margin:18px 0 8px">Carreras guardadas en esta tablet sin subir a la web</div>` +
+    pendientes.map(e => {
+      const d = new Date(e.fecha);
+      const cuando = d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'}) + ' ' +
+        d.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+      return `<div class="lapRow" style="gap:10px;flex-wrap:wrap">
+        <span class="lapNum">${cuando}</span>
+        <span>${e.track || 'Circuito ?'} · ${e.vueltasCompletadas}/${e.totalLaps} v · ${fmtLapTime(e.mejorVuelta)}</span>
+        <button onclick="subirCarreraManual(${e.fecha})" style="background:var(--green);color:#000;padding:4px 10px">Subir a la fecha</button>
+      </div>`;
+    }).join('');
+}
+
+async function subirCarreraManual(entryFecha){
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){ return; }
+  const entry = archivo.find(e => e.fecha === entryFecha);
+  if(!entry) return;
+  entry.esFecha = true;
+  if(!entry.fechaId) entry.fechaId = fechaId || crypto.randomUUID();
+  try{ localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(archivo)); }catch(e){}
+  await subirSesionSupabase(entry);
+  renderLapHistory();
+}
+
 function renderLapHistory(){
   const list = document.getElementById('lapHistoryList');
   if(lapHistory.length === 0){
-    list.innerHTML = '<div class="label">Todavia no completaste ninguna vuelta esta sesion.</div>';
+    list.innerHTML = '<div class="label">Todavia no completaste ninguna vuelta esta sesion.</div>' + htmlCarrerasSinSubir();
     return;
   }
   const validas = lapHistory.filter(l => !l.outLap);
@@ -1197,7 +1228,7 @@ function renderLapHistory(){
       <span class="lapTime">${fmtLapTime(l.timeMs)}</span>
       <span class="lapDiff ${diffClass}">${diffText}</span>
     </div>`;
-  }).reverse().join('');
+  }).reverse().join('') + htmlCarrerasSinSubir();
 }
 
 const MINI_LAP_COUNT = 5;
