@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+// el dashboard.html del repo va adentro del APK como respaldo (la app igual baja el ultimo de GitHub)
+def webAssets = layout.buildDirectory.dir('webassets')
+tasks.register('copiarDashboard', Copy) {
+    from rootProject.file('../dashboard.html')
+    into webAssets.map { it.dir('web') }
+}
+preBuild.dependsOn 'copiarDashboard'
+
+android {
+    namespace 'ar.pcrt.dash'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ar.pcrt.dash'
+        minSdk 26
+        targetSdk 34
+        versionCode((project.findProperty('versionCode') ?: '1') as int)
+        versionName '1.' + (project.findProperty('versionCode') ?: '0')
+    }
+
+    // la clave de firma NO esta en el repo: la pone el workflow (secreto PCRT_KEYSTORE de GitHub).
+    // Con la misma clave, cada APK nuevo se instala encima del anterior sin desinstalar.
+    signingConfigs {
+        pcrt {
+            storeFile file(System.getenv('PCRT_KEYSTORE_PATH') ?: 'pcrt.keystore')
+            storePassword System.getenv('PCRT_KEYSTORE_PASS') ?: ''
+            keyAlias System.getenv('PCRT_KEY_ALIAS') ?: 'pcrt'
+            keyPassword System.getenv('PCRT_KEYSTORE_PASS') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.pcrt
+        }
+    }
+
+    sourceSets {
+        main.assets.srcDirs += [webAssets.get().asFile]
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
