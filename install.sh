@@ -70,9 +70,11 @@ ok "Python y git instalados"
 
 paso 3 "Bajando el dashboard PCRT..."
 if [ -d "$CARPETA/.git" ]; then
-  # ya estaba instalado: lo dejamos igual a la ultima version (a prueba de cambios locales)
+  # ya estaba instalado: lo dejamos igual a la ultima version (a prueba de cambios locales) y
+  # siguiendo main (checkout -B, no reset): si la tablet habia quedado en una rama de prueba,
+  # el auto-update seguia esa rama y nunca le llegaba lo nuevo de main
   reintentar "la descarga" git -C "$CARPETA" fetch --quiet origin \
-    && git -C "$CARPETA" reset --hard --quiet origin/main >>"$LOG" 2>&1 \
+    && git -C "$CARPETA" checkout --quiet --force -B main origin/main >>"$LOG" 2>&1 \
     || falla "No se pudo actualizar el dashboard."
 else
   rm -rf "$CARPETA"
