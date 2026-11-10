@@ -668,10 +668,11 @@ async function reintentarSubidasPendientesInner(){
   await recuperarCarrerasDeFecha(archivo);
 }
 
-// carreras que quedaron guardadas sin subir porque FECHA estaba apagada: si otro piloto subio una
-// carrera de fecha a la misma hora, esta tambien era de la fecha y se sube sola
+// carreras que quedaron guardadas sin subir porque FECHA estaba apagada: si al menos 2 pilotos mas subieron
+// carreras de fecha a la misma hora y en el mismo circuito, esta tambien era de la fecha y se sube sola
 const RECUPERAR_VENTANA_MS = 10*60*1000;
 const RECUPERAR_DIAS = 14;
+const RECUPERAR_MIN_PILOTOS = 2; // otros pilotos con carrera de fecha a esa hora y en ese circuito
 async function recuperarCarrerasDeFecha(archivo){
   const driverId = PILOT_DRIVER_IDS[currentPilot];
   if(!sbClient || !driverId) return;
@@ -679,12 +680,15 @@ async function recuperarCarrerasDeFecha(archivo){
   const candidatas = archivo.filter(e => !e.esFecha && !e.subida && e.fecha > desde && e.piloto === currentPilot);
   for(const entry of candidatas){
     try{
-      const { data, error } = await sbClient.from('dashboard_sessions').select('id')
+      const { data, error } = await sbClient.from('dashboard_sessions').select('driver_id')
         .eq('es_fecha', true).neq('driver_id', driverId)
+        .eq('track', entry.track)
         .gte('created_at', new Date(entry.fecha - RECUPERAR_VENTANA_MS).toISOString())
-        .lte('created_at', new Date(entry.fecha + RECUPERAR_VENTANA_MS).toISOString())
-        .limit(1);
-      if(error || !data || !data.length) continue;
+        .lte('created_at', new Date(entry.fecha + RECUPERAR_VENTANA_MS).toISOString());
+      if(error || !data) continue;
+      // un solo piloto con FECHA prendida por error no alcanza (10/11: Mariano arrastro las de Matias
+      // en un dia sin fecha): tienen que ser al menos 2 pilotos distintos, mismo circuito y misma hora
+      if(new Set(data.map(r => r.driver_id)).size < RECUPERAR_MIN_PILOTOS) continue;
       entry.esFecha = true;
       if(!entry.fechaId) entry.fechaId = crypto.randomUUID();
       try{ localStorage.setItem('pcrt_sesionesArchivadas', JSON.stringify(archivo)); }catch(e){}
