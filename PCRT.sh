@@ -48,6 +48,9 @@ fi
 
 echo "Iniciando servidor PCRT..."
 cd "$CARPETA" || exit 1
+# el log de la vez anterior NO se borra: se guarda como .anterior para poder ver por que se corto
+# (si se cerro y abrio Termux despues de un cuelgue, ahi queda la evidencia)
+[ -f "$LOG" ] && mv -f "$LOG" "$LOG.anterior"
 : > "$LOG"
 # lo corre el vigia: si Android mata el server en segundo plano, lo vuelve a levantar solo
 nohup bash pcrt_vigia.sh > /dev/null 2>&1 &
