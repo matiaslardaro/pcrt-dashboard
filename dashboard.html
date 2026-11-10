@@ -557,10 +557,33 @@ function cajaLogYa(msg){ cajaLog(msg); cajaGuardar(); }
 window.addEventListener('error', e => cajaLogYa('ERROR JS: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')'));
 window.addEventListener('unhandledrejection', e => cajaLogYa('ERROR promesa: ' + (e.reason && (e.reason.message || e.reason))));
 document.addEventListener('visibilitychange', () => cajaLogYa('Pantalla ' + (document.hidden ? 'oculta (segundo plano / bloqueo)' : 'visible')));
-window.addEventListener('pagehide', () => cajaLogYa('Pagina cerrada / recargada'));
+let paginaSaliendo = false; // al cerrar/recargar el socket se cierra a proposito: no es un corte
+window.addEventListener('pagehide', () => { paginaSaliendo = true; cajaLogYa('Pagina cerrada / recargada'); });
 window.addEventListener('online', () => cajaLog('Wifi: online'));
 window.addEventListener('offline', () => cajaLogYa('Wifi: OFFLINE'));
 cajaLogYa('==== Dashboard abierto (' + location.host + ') ====');
+// despues de un corte, cuando vuelve la conexion, sube sola la caja negra y el log del server
+// a Supabase (tabla dashboard_diag) para diagnosticar sin que el piloto tenga que hacer nada
+async function subirDiagnostico(motivo){
+  try{
+    let serverLog = null;
+    try{
+      const r = await fetch('/diag?t=' + Date.now(), {cache:'no-store'});
+      if(r.ok) serverLog = await r.text();
+    }catch(e){ serverLog = 'no se pudo leer /diag: ' + e.message; }
+    if(typeof sbClient === 'undefined' || !sbClient) return false;
+    const { error } = await sbClient.from('dashboard_diag').insert({
+      piloto: localStorage.getItem('pcrt_piloto'),
+      motivo: motivo,
+      caja_negra: cajaNegra.slice(-150).join('\n'),
+      server_log: serverLog
+    });
+    if(error){ cajaLog('Diagnostico no subido: ' + error.message); return false; }
+    cajaLog('Diagnostico subido a Supabase');
+    return true;
+  }catch(e){ return false; }
+}
+
 function borrarCajaNegra(){
   cajaNegra = []; cajaGuardar();
   document.getElementById('cajaNegraContent').textContent = '(vacia)';
@@ -1448,6 +1471,7 @@ setInterval(() => {
   if(ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsMsgAt > 5000){
     const statusText = document.getElementById('connStatus');
     statusText.textContent = 'Conexion trabada, reconectando...';
+    try{ localStorage.setItem('pcrt_huboCorte', 'conexion zombie'); }catch(e){}
     cajaLogYa('Conexion zombie: ' + Math.round((Date.now()-lastWsMsgAt)/1000) + 's sin datos con el socket abierto');
     statusText.style.color = 'var(--amber)';
     document.getElementById('statusDot').classList.remove('on');
@@ -1548,6 +1572,13 @@ function connect(){
 
   ws.onopen = () => {
     cajaLogYa('WebSocket conectado a ' + host + ':' + port);
+    // hubo un corte antes de esta conexion (aunque se haya cerrado y abierto todo): mandamos el diagnostico
+    if(localStorage.getItem('pcrt_huboCorte')){
+      const motivo = localStorage.getItem('pcrt_huboCorte');
+      setTimeout(async () => {
+        if(await subirDiagnostico(motivo)) localStorage.removeItem('pcrt_huboCorte');
+      }, 8000);
+    }
     clearTimeout(openTimeout);
     fallosSeguidos = 0;
     lastWsMsgAt = Date.now();
@@ -1558,6 +1589,7 @@ function connect(){
     requestWakeLock();
   };
   ws.onclose = (ev) => {
+    if(lastWsMsgAt && !paginaSaliendo) try{ localStorage.setItem('pcrt_huboCorte', 'WebSocket cerrado codigo ' + (ev && ev.code)); }catch(e){}
     cajaLogYa('WebSocket cerrado (codigo ' + (ev && ev.code) + ', fallos seguidos ' + (fallosSeguidos+1) + ', ' + (lastWsMsgAt ? Math.round((Date.now()-lastWsMsgAt)/1000) + 's desde el ultimo dato' : 'nunca llego un dato') + ')');
     if(++fallosSeguidos >= 3) document.getElementById('conf').classList.remove('collapsed');
     document.getElementById('statusDot').classList.remove('on');

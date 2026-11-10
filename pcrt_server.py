@@ -349,6 +349,24 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         if ruta.startswith("/.git") or ruta.endswith((".log", ".py", ".sh")):
             self.send_error(404)
             return
+        if self.path.startswith("/diag"):
+            # cola del log de esta vez y de la anterior: el dashboard la sube sola a Supabase
+            # despues de un corte, asi se diagnostica sin que el piloto tenga que hacer nada
+            partes = []
+            for nombre in ("pcrt_server.log.anterior", "pcrt_server.log"):
+                try:
+                    with open(os.path.join(HERE, nombre), "r", errors="replace") as f:
+                        lineas = f.readlines()[-80:]
+                    partes.append(f"===== {nombre} =====\n" + "".join(lineas))
+                except OSError:
+                    partes.append(f"===== {nombre} (no existe) =====\n")
+            body = "\n".join(partes).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path.startswith("/version"):
             with version_lock:
                 h = current_version["hash"] or "unknown"
