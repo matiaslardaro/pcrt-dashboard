@@ -531,6 +531,64 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.75.0/dist/umd/supabase.js"></script>
 <script>
+// ---- caja negra: guarda en la tablet que paso con la conexion y los errores, y sobrevive a
+// cerrar y abrir el navegador. Para diagnosticar cuelgues: menu > Debug > Caja negra.
+const CAJA_KEY = 'pcrt_cajaNegra';
+const CAJA_MAX = 300;
+let cajaNegra = [];
+try{ cajaNegra = JSON.parse(localStorage.getItem(CAJA_KEY)) || []; }catch(e){ cajaNegra = []; }
+let cajaTimer = null;
+function cajaGuardar(){
+  clearTimeout(cajaTimer); cajaTimer = null;
+  try{ localStorage.setItem(CAJA_KEY, JSON.stringify(cajaNegra)); }catch(e){}
+}
+function cajaLog(msg){
+  const d = new Date();
+  const hora = d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'}) + ' ' +
+    d.toLocaleTimeString('es-AR', {hour12:false}) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+  cajaNegra.push(hora + '  ' + msg);
+  if(cajaNegra.length > CAJA_MAX) cajaNegra = cajaNegra.slice(-CAJA_MAX);
+  // se guarda agrupado (no en cada linea) salvo que sea grave
+  if(!cajaTimer) cajaTimer = setTimeout(cajaGuardar, 2000);
+  const el = document.getElementById('cajaNegraContent');
+  if(el && document.getElementById('debugPanel').classList.contains('open')) el.textContent = cajaNegra.slice().reverse().join('\n');
+}
+function cajaLogYa(msg){ cajaLog(msg); cajaGuardar(); }
+window.addEventListener('error', e => cajaLogYa('ERROR JS: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')'));
+window.addEventListener('unhandledrejection', e => cajaLogYa('ERROR promesa: ' + (e.reason && (e.reason.message || e.reason))));
+document.addEventListener('visibilitychange', () => cajaLogYa('Pantalla ' + (document.hidden ? 'oculta (segundo plano / bloqueo)' : 'visible')));
+let paginaSaliendo = false; // al cerrar/recargar el socket se cierra a proposito: no es un corte
+window.addEventListener('pagehide', () => { paginaSaliendo = true; cajaLogYa('Pagina cerrada / recargada'); });
+window.addEventListener('online', () => cajaLog('Wifi: online'));
+window.addEventListener('offline', () => cajaLogYa('Wifi: OFFLINE'));
+cajaLogYa('==== Dashboard abierto (' + location.host + ') ====');
+// despues de un corte, cuando vuelve la conexion, sube sola la caja negra y el log del server
+// a Supabase (tabla dashboard_diag) para diagnosticar sin que el piloto tenga que hacer nada
+async function subirDiagnostico(motivo){
+  try{
+    let serverLog = null;
+    try{
+      const r = await fetch('/diag?t=' + Date.now(), {cache:'no-store'});
+      if(r.ok) serverLog = await r.text();
+    }catch(e){ serverLog = 'no se pudo leer /diag: ' + e.message; }
+    if(typeof sbClient === 'undefined' || !sbClient) return false;
+    const { error } = await sbClient.from('dashboard_diag').insert({
+      piloto: localStorage.getItem('pcrt_piloto'),
+      motivo: motivo,
+      caja_negra: cajaNegra.slice(-150).join('\n'),
+      server_log: serverLog
+    });
+    if(error){ cajaLog('Diagnostico no subido: ' + error.message); return false; }
+    cajaLog('Diagnostico subido a Supabase');
+    return true;
+  }catch(e){ return false; }
+}
+
+function borrarCajaNegra(){
+  cajaNegra = []; cajaGuardar();
+  document.getElementById('cajaNegraContent').textContent = '(vacia)';
+}
+
 const SUPABASE_URL = 'https://onedwgygbpmhksiaouun.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eghHyzp21oO1g5Q_FR48yA_kWzA8kal';
 // si la red no tiene internet la libreria de Supabase no carga: no rompemos el resto del dashboard
@@ -694,6 +752,8 @@ async function recuperarCarrerasDeFecha(archivo){
     ID de circuito en uso: <span id="debugTrackIdUsed" class="mono">--</span>
     (<span id="debugTrackNameUsed">--</span>)
   </div>
+  <div class="label">Caja negra (lo ultimo arriba) <button onclick="borrarCajaNegra()" style="position:static;background:#333;padding:2px 8px;margin:0 0 0 8px;font-size:11px">Borrar</button></div>
+  <pre id="cajaNegraContent" style="max-height:40vh;overflow:auto;color:var(--amber)">(vacia)</pre>
   <div class="label">Ultimo paquete recibido (nombres reales de los campos)</div>
   <pre id="debugContent">Esperando datos...</pre>
 </div>
@@ -786,6 +846,7 @@ function toggleConf(){
 
 function toggleDebug(){
   document.getElementById('debugPanel').classList.toggle('open');
+  document.getElementById('cajaNegraContent').textContent = cajaNegra.length ? cajaNegra.slice().reverse().join('\n') : '(vacia)';
 }
 
 function toggleStatusMenu(){
@@ -1410,6 +1471,8 @@ setInterval(() => {
   if(ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsMsgAt > 5000){
     const statusText = document.getElementById('connStatus');
     statusText.textContent = 'Conexion trabada, reconectando...';
+    try{ localStorage.setItem('pcrt_huboCorte', 'conexion zombie'); }catch(e){}
+    cajaLogYa('Conexion zombie: ' + Math.round((Date.now()-lastWsMsgAt)/1000) + 's sin datos con el socket abierto');
     statusText.style.color = 'var(--amber)';
     document.getElementById('statusDot').classList.remove('on');
     connect();
@@ -1418,6 +1481,26 @@ setInterval(() => {
 
 // sin conexion con el server: no dejamos velocidad/RPM/marcha clavados con el ultimo dato,
 // que parece que el dash se tildo cuando en realidad se cayo el server de Termux
+// latido de la caja negra: cada minuto anota cuantos paquetes llegaron. Si el navegador se congela,
+// queda un hueco en los latidos; si se cae el server, quedan latidos con 0 paquetes
+let paquetesMinuto = 0;
+let ultimoStatusLogueado = '';
+setInterval(() => {
+  const st = (document.getElementById('connStatus') || {}).textContent || '';
+  cajaLog('latido: ' + paquetesMinuto + ' paquetes/min, ws ' + (ws ? ['conectando','abierto','cerrando','cerrado'][ws.readyState] : 'sin crear') +
+    ', estado "' + st + '"' + (document.hidden ? ', pantalla oculta' : ''));
+  paquetesMinuto = 0;
+}, 60000);
+// cada cambio del texto de estado (Conectado / GT7 en menu / Server caido / Sin señal...) queda anotado
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('connStatus');
+  if(!el) return;
+  new MutationObserver(() => {
+    const t = el.textContent;
+    if(t && t !== ultimoStatusLogueado){ ultimoStatusLogueado = t; cajaLog('Estado: ' + t); }
+  }).observe(el, {childList:true, characterData:true, subtree:true});
+});
+
 function limpiarHud(){
   document.getElementById('vSpeed').textContent = '--';
   document.getElementById('vRpm').textContent = '--';
@@ -1488,6 +1571,14 @@ function connect(){
   }, 3000);
 
   ws.onopen = () => {
+    cajaLogYa('WebSocket conectado a ' + host + ':' + port);
+    // hubo un corte antes de esta conexion (aunque se haya cerrado y abierto todo): mandamos el diagnostico
+    if(localStorage.getItem('pcrt_huboCorte')){
+      const motivo = localStorage.getItem('pcrt_huboCorte');
+      setTimeout(async () => {
+        if(await subirDiagnostico(motivo)) localStorage.removeItem('pcrt_huboCorte');
+      }, 8000);
+    }
     clearTimeout(openTimeout);
     fallosSeguidos = 0;
     lastWsMsgAt = Date.now();
@@ -1497,7 +1588,9 @@ function connect(){
     document.getElementById('conf').classList.add('collapsed');
     requestWakeLock();
   };
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
+    if(lastWsMsgAt && !paginaSaliendo) try{ localStorage.setItem('pcrt_huboCorte', 'WebSocket cerrado codigo ' + (ev && ev.code)); }catch(e){}
+    cajaLogYa('WebSocket cerrado (codigo ' + (ev && ev.code) + ', fallos seguidos ' + (fallosSeguidos+1) + ', ' + (lastWsMsgAt ? Math.round((Date.now()-lastWsMsgAt)/1000) + 's desde el ultimo dato' : 'nunca llego un dato') + ')');
     if(++fallosSeguidos >= 3) document.getElementById('conf').classList.remove('collapsed');
     document.getElementById('statusDot').classList.remove('on');
     limpiarHud();
@@ -1509,6 +1602,7 @@ function connect(){
     scheduleReconnect();
   };
   ws.onerror = () => {
+    cajaLog('WebSocket error');
     document.getElementById('statusDot').classList.remove('on');
     statusText.textContent = 'Error de conexion (bridge apagado o IP/puerto mal)';
     statusText.style.color = 'var(--red)';
@@ -1550,6 +1644,7 @@ function connect(){
 
   ws.onmessage = (ev) => {
     lastWsMsgAt = Date.now();
+    paquetesMinuto++;
     let d;
     try{ d = JSON.parse(ev.data); }catch(e){ return; } // paquete roto: lo salteamos y seguimos con el proximo
     // el JSON formateado es pesado a 15 paquetes/s: solo lo armamos si el panel de debug esta abierto
@@ -1863,6 +1958,7 @@ function connect(){
           // termino la carrera de vueltas fijas: se archiva y se sube ya, sin esperar a la sesion siguiente
           // (asi se marca como fecha segun la palanca de ahora, y no se pierde si se cierra todo)
           if(typeof totalLaps === 'number' && totalLaps > 0 && lapTrack.lastLapNum === totalLaps){
+            cajaLogYa('Meta: carrera terminada (' + totalLaps + ' vueltas, ' + lapHistory.length + ' anotadas)');
             archivarSesionActual(totalLaps);
             sesionArchivada = true;
           }

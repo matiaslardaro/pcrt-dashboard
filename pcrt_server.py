@@ -163,6 +163,21 @@ ultimo_paquete = (None, None)
 _cache = {"ts": None, "data": None}
 
 
+paquetes_ps5 = [0]       # paquetes procesados de la PS5 desde el ultimo latido
+tablets_conectadas = [0]
+
+
+def latido(interval_sec=60):
+    """Una linea por minuto en el log con la hora: si el log se corta de golpe sin
+    'el server se cayo' del vigia, Android mato Termux entero; si siguen los latidos
+    con 0 paquetes, el server vivia pero la PS5 no mandaba."""
+    while True:
+        time.sleep(interval_sec)
+        n, paquetes_ps5[0] = paquetes_ps5[0], 0
+        print(f"[pcrt_server {time.strftime('%H:%M:%S')}] latido: {n} paquetes PS5/min, "
+              f"{tablets_conectadas[0]} tablet(s) conectada(s)")
+
+
 def on_telemetry(t):
     # sync a proposito: gt-telem crea un event loop NUEVO por paquete (60 por segundo)
     # para callbacks async; sync es mucho mas liviano y Android tiene menos motivos para matarlo
@@ -171,6 +186,7 @@ def on_telemetry(t):
         _first_packet_seen = True
         print("[pcrt_server] >>> Primer paquete de telemetria recibido de la PS5 <<<")
     ultimo_paquete = (t, time.time())
+    paquetes_ps5[0] += 1
 
 
 def armar_latest():
@@ -290,7 +306,8 @@ def run_telemetry_client(ps_ip):
 # WebSocket (retransmite el ultimo paquete a los dashboards conectados)
 # ---------------------------------------------------------------------------
 async def ws_handler(websocket):
-    print("[pcrt_server] Tablet conectada por WebSocket")
+    tablets_conectadas[0] += 1
+    print(f"[pcrt_server {time.strftime('%H:%M:%S')}] Tablet conectada por WebSocket")
     try:
         while True:
             latest = armar_latest()
@@ -307,7 +324,11 @@ async def ws_handler(websocket):
             await websocket.send(json.dumps(payload, default=str))
             await asyncio.sleep(1 / 15)
     except websockets.exceptions.ConnectionClosed:
-        print("[pcrt_server] Tablet desconectada")
+        print(f"[pcrt_server {time.strftime('%H:%M:%S')}] Tablet desconectada")
+    except Exception as e:
+        print(f"[pcrt_server {time.strftime('%H:%M:%S')}] Error mandando a la tablet: {e!r}")
+    finally:
+        tablets_conectadas[0] -= 1
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +348,24 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         ruta = self.path.split("?", 1)[0]
         if ruta.startswith("/.git") or ruta.endswith((".log", ".py", ".sh")):
             self.send_error(404)
+            return
+        if self.path.startswith("/diag"):
+            # cola del log de esta vez y de la anterior: el dashboard la sube sola a Supabase
+            # despues de un corte, asi se diagnostica sin que el piloto tenga que hacer nada
+            partes = []
+            for nombre in ("pcrt_server.log.anterior", "pcrt_server.log"):
+                try:
+                    with open(os.path.join(HERE, nombre), "r", errors="replace") as f:
+                        lineas = f.readlines()[-80:]
+                    partes.append(f"===== {nombre} =====\n" + "".join(lineas))
+                except OSError:
+                    partes.append(f"===== {nombre} (no existe) =====\n")
+            body = "\n".join(partes).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if self.path.startswith("/version"):
             with version_lock:
@@ -375,6 +414,8 @@ if __name__ == "__main__":
 
     t_hb = threading.Thread(target=heartbeat_keeper, daemon=True)
     t_hb.start()
+
+    threading.Thread(target=latido, daemon=True).start()
 
     t_http = threading.Thread(target=run_http_server, args=(args.http_port,), daemon=True)
     t_http.start()
