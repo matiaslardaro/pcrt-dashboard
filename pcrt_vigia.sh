@@ -19,7 +19,8 @@ while true; do
     tail -c 500000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
   fi
   echo "[vigia $(date '+%F %T')] arrancando server" >> "$LOG"
-  python -u pcrt_server.py >> "$LOG" 2>&1
+  # PCRT_VIGIA=1: el server sabe que lo esta cuidando el vigia (si no, se relanza bajo el vigia)
+  PCRT_VIGIA=1 python -u pcrt_server.py >> "$LOG" 2>&1
   CODIGO=$?
   echo "[vigia $(date '+%F %T')] el server se cayo (codigo $CODIGO), lo reinicio en 2s" >> "$LOG"
   sleep 2
