@@ -109,6 +109,43 @@ def git_updater(interval_sec=180):
 
 
 # ---------------------------------------------------------------------------
+# Arranque bajo el vigia. Copias viejas del script de arranque (el acceso directo de
+# Termux:Widget se copio una sola vez al instalar y nunca se actualiza) levantan el
+# server SIN el vigia: si Android lo mata, nadie lo levanta (cortes del 10/11).
+# Si arrancamos sin el vigia, arreglamos el acceso directo y nos relanzamos bajo el vigia.
+# ---------------------------------------------------------------------------
+ACCESO_DIRECTO = """#!/data/data/com.termux/files/usr/bin/bash
+# Acceso directo de Termux:Widget: llama al script de arranque actualizado del repo
+exec bash "$HOME/pcrt/PCRT.sh"
+"""
+
+
+def asegurar_vigia():
+    en_termux = "com.termux" in os.environ.get("PREFIX", "")
+    vigia = os.path.join(HERE, "pcrt_vigia.sh")
+    if not en_termux or os.environ.get("PCRT_VIGIA") == "1" or not os.path.isfile(vigia):
+        return
+    atajo = os.path.join(os.path.expanduser("~"), ".shortcuts", "PCRT.sh")
+    try:
+        if os.path.isfile(atajo):
+            with open(atajo) as f:
+                viejo = f.read()
+            if viejo != ACCESO_DIRECTO:
+                with open(atajo, "w") as f:
+                    f.write(ACCESO_DIRECTO)
+                os.chmod(atajo, 0o755)
+                print("[pcrt_server] Acceso directo viejo reemplazado por uno que usa PCRT.sh actualizado")
+    except OSError as e:
+        print(f"[pcrt_server] No se pudo arreglar el acceso directo: {e}")
+    print("[pcrt_server] Arrancado sin el vigia: me relanzo bajo el vigia para que me levante si Android me mata")
+    subprocess.Popen(
+        ["bash", vigia], cwd=HERE, start_new_session=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    raise SystemExit(0)
+
+
+# ---------------------------------------------------------------------------
 # Limpieza de procesos viejos colgados (bridge / http.server / esta misma
 # app de una corrida anterior que no cerro bien) antes de arrancar.
 # ---------------------------------------------------------------------------
@@ -401,6 +438,8 @@ if __name__ == "__main__":
     parser.add_argument("--ws-port", help="Puerto del WebSocket de telemetria", type=int, default=8765)
     parser.add_argument("--http-port", help="Puerto del servidor del dashboard", type=int, default=8080)
     args = parser.parse_args()
+
+    asegurar_vigia()
 
     print("[pcrt_server] Chequeando procesos viejos colgados...")
     kill_old_processes()
