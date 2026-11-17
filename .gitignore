@@ -1,2 +1,7 @@
 pcrt_server.log*
 __pycache__/
+.version
+.rama
+.ps5ip
+.venv/
+/PCRT.command

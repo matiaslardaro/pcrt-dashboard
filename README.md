@@ -56,6 +56,21 @@ Al terminar se abre el dashboard solo. Elegí tu piloto y tocá **Encender motor
 
 ---
 
+## En Mac
+
+En la Mac no hace falta Termux. Abrí la **Terminal** (Cmd+Espacio, escribí "Terminal"), pegá esto y tocá Enter:
+
+```
+curl -fsSL https://raw.githubusercontent.com/matiaslardaro/pcrt-dashboard/main/mac/instalar.sh | bash
+```
+
+No pide contraseña. La primera vez tarda un par de minutos y al final se abre el dashboard. Queda un **PCRT** en el Escritorio: de ahí en más, doble clic y listo (se actualiza solo cada vez que lo abrís). Dejá abierta la ventana de Terminal mientras corrés.
+
+- Si la Mac pregunta si Python puede **aceptar conexiones entrantes**, tocá **Permitir** (si no, no llegan los datos de la PS5).
+- Si no encuentra la PS5 sola: `echo 192.168.X.X > ~/pcrt/.ps5ip` con la IP de la PS5 y volvé a abrir PCRT.
+
+---
+
 ## Cada vez que corras
 
 1. **Abrí Termux.** El dashboard se abre solo en el navegador. Después dejá Termux en segundo plano, no lo cierres.
@@ -83,6 +98,7 @@ Los datos llegan cuando estás en pista, no en los menús. Se actualiza solo cua
 
 - `android/`: app de Android EN PRUEBA (Java, sin dependencias). `Puente.java` hace lo mismo que `pcrt_server.py` (descubre la PS5, heartbeat, descifra con Salsa20, WebSocket 8765 + HTTP 8080, baja `dashboard.html` de `main` cada 3 min). El workflow `App Android` compila el APK y, desde `main`, lo publica en el release `app`. Para que los APK nuevos se instalen encima de los viejos hay que cargar los secretos `PCRT_KEYSTORE` (keystore en base64) y `PCRT_KEYSTORE_PASS`; sin ellos se firma con una clave temporal.
 
+- `mac/`: `instalar.sh` instala [uv](https://docs.astral.sh/uv/) (trae su propio Python, sin contraseña ni herramientas de Apple) y deja un acceso directo en el Escritorio que llama a `~/pcrt/PCRT.command`. Ese script baja el código de GitHub en cada arranque (sin git; la versión queda en `.version`), se reemplaza solo si cambió, instala las librerías si faltan y levanta el server. Sin carpeta `.git`, `pcrt_server.py` no llama a git (en una Mac sin herramientas de desarrollo abriría el cartel de instalarlas).
 - `pcrt_server.py`: recibe la telemetría de la PS5 (con [gt-telem](https://github.com/RaceCrewAI/gt-telem)), la manda por WebSocket (puerto 8765) y sirve el dashboard (puerto 8080). Cada 3 minutos se actualiza solo desde la rama `main`.
 - `dashboard.html`: el display. Sube las carreras a Supabase (tabla `dashboard_sessions`) cuando la palanca FECHA está prendida.
 - `install.sh`: instalador de un comando. Deja configurado que `PCRT.sh` corra solo al abrir Termux (bloque `# >>> PCRT >>>` en `~/.bashrc`; borrarlo para que no arranque solo). El detalle de la instalación queda en `~/pcrt-instalacion.log`.

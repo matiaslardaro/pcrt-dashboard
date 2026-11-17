@@ -47,7 +47,19 @@ current_version = {"hash": None}
 version_lock = threading.Lock()
 
 
+# En la Mac el proyecto se baja sin git (mac/PCRT.command baja el codigo de GitHub en cada
+# arranque y deja la version en .version). Sin la carpeta .git no llamamos a git: en una Mac sin
+# las herramientas de desarrollo, cada llamada a git abre el cartel de "instalar herramientas".
+HAY_GIT = os.path.isdir(os.path.join(HERE, ".git"))
+
+
 def get_git_hash():
+    if not HAY_GIT:
+        try:
+            with open(os.path.join(HERE, ".version")) as f:
+                return f.read().strip()[:7] or None
+        except OSError:
+            return None
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -445,8 +457,9 @@ if __name__ == "__main__":
     kill_old_processes()
 
     current_version["hash"] = get_git_hash()
-    t_update = threading.Thread(target=git_updater, daemon=True)
-    t_update.start()
+    if HAY_GIT:
+        t_update = threading.Thread(target=git_updater, daemon=True)
+        t_update.start()
 
     t_telem = threading.Thread(target=run_telemetry_client, args=(args.ip,), daemon=True)
     t_telem.start()
