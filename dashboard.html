@@ -605,10 +605,32 @@ const PILOT_DRIVER_IDS = {
 
 // sube la sesion a dashboard_sessions si estamos en modo fecha; no bloquea, solo loguea si falla.
 // idempotente: si ya existe una fila igual (por un reintento tras corte), no duplica.
+// carrera archivada sin hora (snapshot de antes del fix del 22/11): la hora real es la de la ultima
+// carrera de fecha de los otros pilotos en ese circuito y con esas vueltas
+async function ubicarCarreraSinHora(entry, driverId){
+  if(!entry.sinHora) return true;
+  const { data, error } = await sbClient.from('dashboard_sessions').select('created_at')
+    .eq('es_fecha', true).neq('driver_id', driverId)
+    .eq('track', entry.track).eq('total_laps', entry.totalLaps)
+    .gte('created_at', new Date(Date.now() - RECUPERAR_DIAS*24*3600*1000).toISOString())
+    .order('created_at', { ascending:false }).limit(1);
+  if(error) return false;
+  if(!data || !data.length){ entry.sinHora = false; return true; } // no hay con que ubicarla: queda la hora de archivado
+  const nueva = new Date(data[0].created_at).getTime();
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){}
+  const guardada = archivo.find(e => e.fecha === entry.fecha);
+  entry.fecha = nueva; entry.sinHora = false;
+  if(guardada){ guardada.fecha = nueva; guardada.sinHora = false; }
+  try{ localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(archivo)); }catch(e){}
+  return true;
+}
+
 async function subirSesionSupabase(entry){
   const driverId = PILOT_DRIVER_IDS[entry.piloto || currentPilot];
   if(!driverId || !sbClient) return; // sin Supabase queda pendiente y se reintenta despues
   try{
+    if(!(await ubicarCarreraSinHora(entry, driverId))) return;
     let q = sbClient.from('dashboard_sessions').select('id')
       .eq('driver_id', driverId)
       .eq('track', entry.track)
@@ -681,6 +703,7 @@ async function recuperarCarrerasDeFecha(archivo){
   const candidatas = archivo.filter(e => !e.esFecha && !e.subida && e.fecha > desde && e.piloto === currentPilot);
   for(const entry of candidatas){
     try{
+      if(!(await ubicarCarreraSinHora(entry, driverId))) continue;
       const { data, error } = await sbClient.from('dashboard_sessions').select('driver_id')
         .eq('es_fecha', true).neq('driver_id', driverId)
         .eq('track', entry.track)
@@ -1177,6 +1200,12 @@ let lastTrackLabel = '';
 // para ese momento ya es el auto de la proxima carrera (bug del 01/11: Porsche anotado como Scirocco)
 let sesionCarLabel = '';
 let sesionTrackLabel = '';
+// hora de la ultima vuelta y estado de la palanca FECHA en ese momento: si la carrera no se archiva
+// al cruzar la meta (piloto doblado, Chrome cerrado), se archiva despues con la hora real de la carrera
+// y no con la del momento del archivado (bug 22/11: ultima carrera de la fecha nunca subio)
+let sesionUltimaVueltaTs = null;
+let sesionEsFecha = false;
+let sesionFechaId = null;
 
 // ---- modo fecha: cuando esta activo, las sesiones de carrera (vueltas fijas) se archivan como oficiales ----
 const SESSION_STORAGE_KEY = 'pcrt_sesionActual';
@@ -1217,7 +1246,9 @@ function guardarSesionActual(){
     track: sesionTrackLabel || lastTrackLabel,
     car: sesionCarLabel || lastCarLabel,
     piloto: currentPilot,
-    esFecha: modoFecha,
+    esFecha: sesionEsFecha || modoFecha,
+    fechaId: sesionFechaId || fechaId,
+    ts: sesionUltimaVueltaTs || Date.now(),
     lapHistory: lapHistory,
     sessionStartFuel: sessionStartFuel,
     lastFuelPct: lastFuelPct,
@@ -1233,6 +1264,15 @@ function restaurarSesionActual(){
   let s;
   try{ s = JSON.parse(raw); }catch(e){ return; }
   if(!s || !Array.isArray(s.lapHistory) || s.lapHistory.length === 0) return;
+  // mas de 15 min sin vueltas (o snapshot viejo sin hora): esa carrera ya termino y no se archivo al
+  // cruzar la meta (piloto doblado, Chrome cerrado en la ultima vuelta). Se archiva ahora como estaba.
+  if(!s.ts || Date.now() - s.ts > SESION_VIEJA_MS){
+    archivarSnapshotViejo(s);
+    return;
+  }
+  sesionUltimaVueltaTs = s.ts;
+  sesionEsFecha = !!s.esFecha;
+  sesionFechaId = s.fechaId || null;
   lapHistory = s.lapHistory;
   sessionStartFuel = s.sessionStartFuel;
   lastFuelPct = s.lastFuelPct;
@@ -1255,6 +1295,37 @@ function restaurarSesionActual(){
   renderMiniLapList();
 }
 
+const SESION_VIEJA_MS = 15*60*1000;
+function archivarSnapshotViejo(s){
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  if(!(s.totalLaps > 0)) return; // practica libre: no se archiva
+  const validas = s.lapHistory.filter(l => !l.outLap);
+  const entry = {
+    fecha: s.ts || null, // sin hora (snapshot de antes del fix): se ubica por circuito al subir
+    esFecha: !!s.esFecha,
+    fechaId: s.fechaId || null,
+    track: s.track || '',
+    car: s.car || '',
+    piloto: s.piloto || currentPilot,
+    totalLaps: s.totalLaps,
+    vueltasCompletadas: s.lapHistory.length,
+    mejorVuelta: validas.length ? Math.min(...validas.map(l => l.timeMs)) : null,
+    laps: s.lapHistory,
+    subida: false
+  };
+  if(!entry.fecha){
+    entry.fecha = Date.now();
+    entry.sinHora = true;
+  }
+  let archivo = [];
+  try{ archivo = JSON.parse(localStorage.getItem(ARCHIVE_STORAGE_KEY)) || []; }catch(e){}
+  archivo.push(entry);
+  if(archivo.length > MAX_ARCHIVED_SESSIONS) archivo = archivo.slice(-MAX_ARCHIVED_SESSIONS);
+  try{ localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(archivo)); }catch(e){}
+  cajaLogYa('Carrera sin cerrar recuperada: ' + entry.track + ' (' + entry.vueltasCompletadas + '/' + entry.totalLaps + ' v)');
+  // la sube reintentarSubidasPendientes (si era de fecha) o recuperarCarrerasDeFecha (si la palanca estaba apagada)
+}
+
 // al cerrar una sesion (cambio de circuito o de tipo practica/carrera), archivamos si era carrera de vueltas fijas
 function archivarSesionActual(prevTotalLaps){
   if(sesionArchivada) return; // ya se archivo al terminar la carrera
@@ -1262,9 +1333,9 @@ function archivarSesionActual(prevTotalLaps){
     const validas = lapHistory.filter(l => !l.outLap);
     const bestMs = validas.length ? Math.min(...validas.map(l => l.timeMs)) : null;
     const entry = {
-      fecha: Date.now(),
-      esFecha: modoFecha,
-      fechaId: fechaId,
+      fecha: sesionUltimaVueltaTs || Date.now(), // hora de la ultima vuelta, no la de la carrera siguiente
+      esFecha: sesionEsFecha || modoFecha,
+      fechaId: sesionFechaId || fechaId,
       track: sesionTrackLabel || lastTrackLabel,
       car: sesionCarLabel || lastCarLabel,
       piloto: currentPilot,
@@ -1386,6 +1457,9 @@ function resetLapTrack(prevTotalLaps){
   lapHistory = [];
   sesionCarLabel = '';
   sesionTrackLabel = '';
+  sesionUltimaVueltaTs = null;
+  sesionEsFecha = false;
+  sesionFechaId = null;
   sessionStartFuel = null;
   renderSectors();
   renderMiniLapList();
@@ -1960,6 +2034,8 @@ function connect(){
               // el auto/circuito de la sesion son los de cuando se cerraron sus vueltas
               if(lastCarLabel) sesionCarLabel = lastCarLabel;
               if(lastTrackLabel) sesionTrackLabel = lastTrackLabel;
+              sesionUltimaVueltaTs = Date.now();
+              if(modoFecha){ sesionEsFecha = true; sesionFechaId = fechaId; }
             }
             if(!yaRegistrada) lapHistory.push({
               lapNum: lapTrack.lastLapNum,
